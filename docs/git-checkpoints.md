@@ -75,6 +75,11 @@ because both things it blocks are expensive once they are in history:
 Findings are reported by name and location, never by value - echoing a secret
 into the transcript is another copy of the secret.
 
+A line carrying `pragma: allowlist secret` is skipped, the detect-secrets
+convention. Fixtures and documentation examples need to contain things that
+look like credentials; this is how they say so. The gate's own test suite uses
+it, because a secret scanner's tests are made of fake secrets.
+
 ## The branch guard
 
 `hooks/branch-guard` (PreToolUse, `Edit|Write|NotebookEdit`) speaks once per

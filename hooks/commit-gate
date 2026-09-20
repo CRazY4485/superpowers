@@ -60,8 +60,12 @@ escape_for_json() {
 blockers=""
 warnings=""
 
+# Lines carrying the detect-secrets style pragma are the author's explicit
+# statement that the match is a fixture or an example. Test suites for secret
+# scanners need to contain things that look like secrets.
 added_lines() {
-    git -C "$PROJECT_DIR" diff --cached -- "$1" 2>/dev/null | grep '^+' | grep -v '^+++'
+    git -C "$PROJECT_DIR" diff --cached -- "$1" 2>/dev/null \
+        | grep '^+' | grep -v '^+++' | grep -v 'pragma: allowlist secret'
 }
 
 while IFS= read -r file; do

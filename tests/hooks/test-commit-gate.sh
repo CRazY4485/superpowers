@@ -66,7 +66,7 @@ assert_empty "a non-commit command is ignored" "$output"
 
 # --- high confidence secret ---------------------------------------------------
 secret="$(new_repo secret)"
-printf 'aws_key = "AKIAIOSFODNN7EXAMPLE"\n' > "$secret/config.py"
+printf 'aws_key = "AKIAIOSFODNN7EXAMPLE"\n' > "$secret/config.py"  # pragma: allowlist secret
 git -C "$secret" add -A
 output="$(run_gate "$secret" "$(commit_payload)")"
 if printf '%s' "$output" | node "$SCRIPT_DIR/assert-pretooluse.cjs" --deny "config.py" "AWS access key"; then
@@ -86,6 +86,13 @@ else
     fail "a private key block blocks the commit"
     printf '%s\n' "$output" | sed 's/^/        /'
 fi
+
+# --- explicit allowlist pragma ---------------------------------------------------
+allowed="$(new_repo allowlisted)"
+printf 'example_key = "AKIAIOSFODNN7EXAMPLE"  # pragma: allowlist secret\n' > "$allowed/fixture.py"
+git -C "$allowed" add -A
+output="$(run_gate "$allowed" "$(commit_payload)")"
+assert_empty "a line marked with the allowlist pragma is not blocked" "$output"
 
 # --- weak signal warns but does not block --------------------------------------
 weak="$(new_repo weak)"
