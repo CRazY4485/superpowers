@@ -67,6 +67,16 @@ if ($current -ne $Branch) {
 Write-Host "Fetching upstream..." -ForegroundColor Cyan
 Invoke-Git fetch upstream --prune
 
+# What upstream owns and this fork has changed - i.e. where conflicts can occur.
+if (Test-Path "$repoRoot/scripts/upstream-register.sh") {
+    $bash = Get-Command bash -ErrorAction SilentlyContinue
+    if ($bash) {
+        Write-Host ""
+        & bash "$repoRoot/scripts/upstream-register.sh"
+        Write-Host ""
+    }
+}
+
 $behind = (& git rev-list --count "$Branch..upstream/main").Trim()
 if ($behind -eq '0') {
     Write-Host "Already up to date with upstream/main." -ForegroundColor Green
