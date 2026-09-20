@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# SubagentStop hook: tell the dispatcher when a subagent handed back while its
+# test loop was still failing.
+#
+# This is the visibility gap that makes the loop dangerous: the coding happens
+# inside a subagent, the dispatcher sees one closing message, and the owner sees
+# nothing at all. A subagent can end with "implemented, tests green" over a
+# streak of failures - by mistake, or because the last run it did was not the
+# one it reported.
+#
+# Prints a SubagentStop payload on stdout, or nothing. Always exits 0.
+
+set -uo pipefail
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+SOFT_LIMIT="${SUPERPOWERS_TDD_SOFT_LIMIT:-3}"
+STATE_DIR="${SUPERPOWERS_TDD_STATE_DIR:-${TMPDIR:-/tmp}/superpowers-tdd-loop}"
+
+payload=$(cat 2>/dev/null || true)
+[ -n "$payload" ] || exit 0
+
+[ -d "$STATE_DIR" ] || exit 0
+
+# Several commands can be mid-loop at once; the worst one is the one worth
+# reporting.
+streak=0
+command_text=""
+for active in "$STATE_DIR"/*.active; do
+    [ -f "$active" ] || continue
+    candidate=$(head -1 "$active" 2>/dev/null || echo 0)
+    [ -n "$candidate" ] || candidate=0
+    case "$candidate" in
+        ''|*[!0-9]*) continue ;;
+    esac
+    if [ "$candidate" -gt "$streak" ]; then
+        streak="$candidate"
+        command_text=$(sed -n '2p' "$active" 2>/dev/null || true)
+    fi
+done
+[ "$streak" -gt 0 ] || exit 0
+
+# Reported once: the next subagent starts with a clean slate.
+rm -f "$STATE_DIR"/*.active 2>/dev/null || true
+
+[ "$streak" -ge "$SOFT_LIMIT" ] || exit 0
+
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+short_command=$(printf '%s' "$command_text" | head -c 120 | tr '\n' ' ')
+
+message="The subagent that just finished ended over an unresolved test loop: ${streak} consecutive failing runs of \`${short_command}\`, with no green run afterwards."
+message+=$'\n'"Do not accept its report at face value. Run the suite yourself before treating the task as done (superpowers:verification-before-completion), and read its closing message for what it actually claims."
+message+=$'\n'"If the work is genuinely stuck, that belongs in front of your human partner now - not in another dispatch. Say what failed, what was tried, and what decision you need from them."
+
+escaped=$(escape_for_json "$message")
+
+printf '{\n'
+printf '  "hookSpecificOutput": {\n'
+printf '    "hookEventName": "SubagentStop",\n'
+printf '    "additionalContext": "%s"\n' "$escaped"
+printf '  }\n'
+printf '}\n'
+
+exit 0

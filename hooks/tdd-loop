@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# PostToolUse / PostToolUseFailure hook: put a budget on the red-green loop.
+#
+# The failure it exists for: an agent runs the suite, it fails, it edits, it
+# runs again - and again, and again. Inside a subagent nobody sees it: the
+# dispatcher gets one final message, the owner gets nothing, and the loop burns
+# an hour. The pressure to make the test go away grows with every attempt.
+#
+# Counts consecutive failing runs of the same test command. At the soft limit
+# it says to stop iterating and root-cause - including the possibility that the
+# test itself is wrong. At the hard limit it says to stop and report.
+#
+# Prints a PostToolUse payload on stdout, or nothing. Always exits 0.
+
+set -uo pipefail
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+SOFT_LIMIT="${SUPERPOWERS_TDD_SOFT_LIMIT:-3}"
+HARD_LIMIT="${SUPERPOWERS_TDD_HARD_LIMIT:-6}"
+STATE_DIR="${SUPERPOWERS_TDD_STATE_DIR:-${TMPDIR:-/tmp}/superpowers-tdd-loop}"
+
+payload=$(cat 2>/dev/null || true)
+[ -n "$payload" ] || exit 0
+command -v node >/dev/null 2>&1 || exit 0
+
+sep=$'\x1f'
+parsed=$(printf '%s' "$payload" | node -e '
+let raw = "";
+process.stdin.on("data", (d) => { raw += d; });
+process.stdin.on("end", () => {
+  try {
+    const p = JSON.parse(raw);
+    const cmd = (p.tool_input && p.tool_input.command) || "";
+    const response = typeof p.tool_response === "string"
+      ? p.tool_response
+      : JSON.stringify(p.tool_response || "");
+    process.stdout.write([
+      p.hook_event_name || "",
+      p.tool_name || "",
+      cmd.replace(/\u001f/g, " "),
+      response.slice(0, 4000).replace(/\u001f/g, " "),
+    ].join("\u001f"));
+  } catch (error) {
+    process.stdout.write("");
+  }
+});' 2>/dev/null)
+
+[ -n "$parsed" ] || exit 0
+IFS="$sep" read -r event tool_name command_text response <<< "$parsed"
+
+case "$tool_name" in
+    Bash | PowerShell) ;;
+    *) exit 0 ;;
+esac
+[ -n "$command_text" ] || exit 0
+
+# Is this a run of the test suite?
+printf '%s' "$command_text" | grep -qE '(pytest|unittest|npm[[:space:]]+(run[[:space:]]+)?test|yarn[[:space:]]+test|pnpm[[:space:]]+test|jest|vitest|mocha|go[[:space:]]+test|cargo[[:space:]]+test|dotnet[[:space:]]+test|mvn[[:space:]]+(test|verify)|gradle[[:space:]]+test|rspec|phpunit|ctest|tox|bats|bash[[:space:]]+[^[:space:]]*tests?/)' \
+    || exit 0
+
+# Did it fail? A failed tool call is unambiguous; otherwise read the output.
+failed=0
+if [ "$event" = "PostToolUseFailure" ]; then
+    failed=1
+elif printf '%s' "$response" | grep -qiE '([1-9][0-9]*[[:space:]]+(test[s]?[[:space:]]+)?(failed|failures|errors))|\bFAILED\b|\bFAIL\b|AssertionError|Traceback \(most recent call last\)|panic:|test result: FAILED|Tests? failed'; then
+    failed=1
+fi
+
+key=$(printf '%s|%s' "$PROJECT_DIR" "$command_text" | cksum | tr -cd '0-9' | cut -c1-16)
+marker="${STATE_DIR}/${key}"
+mkdir -p "$STATE_DIR" 2>/dev/null || true
+
+if [ "$failed" = "0" ]; then
+    rm -f "$marker" 2>/dev/null || true
+    # A green run clears every streak in this project: the loop is over.
+    rm -f "${STATE_DIR}"/*.active 2>/dev/null || true
+    exit 0
+fi
+
+streak=0
+[ -f "$marker" ] && streak=$(cat "$marker" 2>/dev/null || echo 0)
+[ -n "$streak" ] || streak=0
+streak=$((streak + 1))
+printf '%s' "$streak" > "$marker" 2>/dev/null || true
+# A parallel breadcrumb the SubagentStop hook can find without knowing the key.
+printf '%s\n%s' "$streak" "$command_text" > "${STATE_DIR}/${key}.active" 2>/dev/null || true
+
+[ "$streak" -ge "$SOFT_LIMIT" ] || exit 0
+
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+short_command=$(printf '%s' "$command_text" | head -c 120 | tr '\n' ' ')
+
+if [ "$streak" -ge "$HARD_LIMIT" ]; then
+    message="Stop. ${streak} consecutive failing runs of \`${short_command}\`. The attempt budget for this loop is spent."
+    message+=$'\n'"Do not edit and re-run again. Report instead, to your human partner - or, if you are a subagent, in your handback: the exact failure output, the hypotheses you tried and what each one changed, and what you now believe is wrong."
+    message+=$'\n'"Name which of these it is: the code is wrong; the test is wrong; the spec the test encodes is wrong; or you do not have enough information to tell. The third is a stage change - see superpowers:reworking-earlier-stages."
+    message+=$'\n'"Weakening, skipping or deleting the test is not an escape from this and is blocked at commit time."
+else
+    message="${streak} consecutive failing runs of \`${short_command}\`. Stop iterating and diagnose."
+    message+=$'\n'"Read the failure text again, in full, and say out loud what it actually claims. Use superpowers:systematic-debugging rather than another edit-and-hope."
+    message+=$'\n'"Consider that the test itself may be wrong: it may assert an expectation nobody agreed, encode a misread spec, test implementation detail rather than behaviour, or have been written from the current output. Check it against the requirement that produced it - and if the test is wrong, that is a decision for your human partner, not an edit you make quietly."
+    message+=$'\n'"At ${HARD_LIMIT} failures this loop stops and gets reported."
+fi
+
+escaped=$(escape_for_json "$message")
+
+printf '{\n'
+printf '  "hookSpecificOutput": {\n'
+printf '    "hookEventName": "PostToolUse",\n'
+printf '    "additionalContext": "%s"\n' "$escaped"
+printf '  }\n'
+printf '}\n'
+
+exit 0

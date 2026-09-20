@@ -56,6 +56,11 @@ the judgement: the gate cannot see a tolerance widened from `1e-9` to `1.0`.
 5. **If you cannot tell:** you are missing information, not permission. Say what
    you would need to decide.
 
+After the third identical failure, stop asking "what else can I change" and use
+`superpowers:escalating-instead-of-looping`: it carries the attempt budget, the
+honest way to check whether the test itself is wrong (break the code on purpose
+and see whether the test still passes), and what an escalation has to contain.
+
 Never reach step 3 or 4 by guessing. "This assertion is probably too strict" is
 an assumption, and an assumption is not a reason.
 

@@ -448,6 +448,41 @@ commit-lər) → sahibə nəticə dilində seçim → yalnız bundan sonra nişa
 
 Detallar: `docs/document-lifecycle.md`.
 
+## TDD döngə limiti və yanlış test (fork-a xas)
+
+**Problem:** kod yazma mərhələsi sub-agentin içindədir — o, testi işlədir, uğursuz olur,
+redaktə edir, yenidən işlədir. Sahib bunu **görmür**, çünki həmin transkriptdə deyil.
+Bir saat itir, və hər cəhddən sonra testi aradan qaldırmaq cazibəsi artır.
+
+`hooks/tdd-loop` (`PostToolUse` + `PostToolUseFailure`) test əmrlərini tanıyır və
+ardıcıl uğursuzluqları sayır:
+
+| Ardıcıllıq | Nə inject olunur |
+| --- | --- |
+| 1-2 | heç nə — bu adi red-green-dir |
+| 3 (soft) | Redaktəni dayandır, diaqnoz qoy; **testin özünün yanlış ola biləcəyini** nəzərə al |
+| 6 (hard) | Tamamilə dayan və hesabat ver: sözbəsöz uğursuzluq, sınanmış fərziyyələr, və **hansı**-nın yanlış olduğu: kod / test / spec / məlumat çatışmazlığı |
+
+Yaşıl işlətmə sayğacı sıfırlayır.
+
+**Görünürlük boşluğu bağlandı:** `hooks/subagent-streak` (`SubagentStop`) sub-agent
+həll olunmamış döngə üzərində işi təhvil verirsə, **valideyn sessiyaya** deyir —
+neçə uğursuzluq, hansı əmrdə, və "hesabatını olduğu kimi qəbul etmə, suite-i özün işlət".
+Sub-agent "implemented, tests green" deyə bilər; indi bunu təkzib edən bir səs var.
+
+**Yanlış yazılmış test** — sənin ikinci sualın. Diff-də görünən iki formanı qapı tutur:
+**assertion-suz yeni test** və **həmişə doğru assertion** (`assert True` və s.) → xəbərdarlıq.
+Qalanları (razılaşdırılmamış gözlənti, daxili detala assertion, cari çıxışdan köçürülmüş
+dəyər, heç vaxt qırmızı görülməmiş test) regex-lə tutulmur — onlar üçün
+`superpowers:escalating-instead-of-looping` **dürüst yoxlamanı** verir:
+**implementasiyanı qəsdən sındır və testi işlət.** Hələ də keçirsə, test iddia etdiyini
+yoxlamır. Əvvəlcə checkpoint, sonra bərpa.
+
+Test yanlış çıxsa, səssizcə düzəldilmir: test bir razılaşmanı kodlaşdırır, ona görə
+dəyişdirilməsi **sahibin qərarıdır**; arxasındakı spec yanlışdırsa, bu mərhələ dəyişikliyidir.
+
+Detallar: `docs/tdd-loop-budget.md`.
+
 ## Hansı qovluqlar əhəmiyyətlidir
 
 Claude Code üçün yalnız bunlar işləyir:
@@ -481,6 +516,7 @@ konfliktləri çıxacaq.
 - `skills/keeping-tests-honest/` — testi zəiflətmə təzyiqinə qarşı
 - `skills/reconciling-decisions/` — qərar ziddiyyətləri və əsaslandırma intizamı
 - `skills/reworking-earlier-stages/` — geriyə qayıtmanın qeydlə baş verməsi
+- `skills/escalating-instead-of-looping/` — cəhd büdcəsi, yanlış testin yoxlanışı, eskalasiya məzmunu
 - `skills/following-the-architectural-constitution/` — kodlaşdırma standartı (sənin sənədin)
 - `skills/briefing-subagents/` — sub-agent brifinqinin beş hissəsi
 - `hooks/project-context`, `hooks/context-nudge`, `hooks/interview-context` — inject və xatırlatma hook-ları
@@ -490,12 +526,13 @@ konfliktləri çıxacaq.
 - `hooks/decision-lint`, `hooks/decision-gate` — qərar qeydlərinin linteri və commit qapısı
 - `hooks/doc-lint` — spec/plan ön başlıqlarının və qərar bağlarının linteri
 - `hooks/doc-drift` — sənədlərin git tarixçəsinə qarşı yoxlanışı
+- `hooks/tdd-loop`, `hooks/subagent-streak` — döngə büdcəsi və sub-agent hesabatı
 - `hooks/commit-gates` — üç commit yoxlaması bir prosesdə (sirr, test bütövlüyü, qərar qeydləri); `commit-gate`/`test-integrity`/`decision-gate` nazik sarğılardır
 - `hooks/brief-check` — sub-agent brifinqinin tamlıq yoxlaması
 - `plugin-evals/` — davranış eval-ları (4 case), `docs/evals.md`
 - `commands/` — `context-init`, `context-save`, `interview-status`, `interview-close`, `checkpoints`, `decision-audit`, `constitution-init`, `doc-audit`, `rework`
 - `docs/project-context.md`, `docs/interview-ledger.md`, `docs/git-checkpoints.md` — sənədlər
-- `tests/hooks/test-project-context.sh`, `test-interview-ledger.sh`, `test-git-checkpoint.sh`, `test-commit-nudge.sh`, `test-commit-gate.sh`, `test-research-nudge.sh`, `test-test-integrity.sh`, `test-decision-lint.sh`, `test-brief-check.sh`, `test-doc-lint.sh`, `test-doc-drift.sh` — testlər
+- `tests/hooks/test-project-context.sh`, `test-interview-ledger.sh`, `test-git-checkpoint.sh`, `test-commit-nudge.sh`, `test-commit-gate.sh`, `test-research-nudge.sh`, `test-test-integrity.sh`, `test-decision-lint.sh`, `test-brief-check.sh`, `test-doc-lint.sh`, `test-doc-drift.sh`, `test-tdd-loop.sh` — testlər
 
 **Upstream fayllarına toxunulan yerlər** (merge zamanı konflikt ehtimalı olan siyahı —
 yenilik gələndə əvvəlcə bunlara bax):

@@ -170,6 +170,52 @@ git -C "$justified" add -A
 output="$(run_hook "$justified")"
 assert_empty "a line carrying the test-change pragma is allowed through" "$output"
 
+# --- a test that cannot fail ---------------------------------------------------------
+noassert="$(new_repo noassert)"
+{
+    echo "def test_rejects_zero_quantity():"
+    echo "    assert validate(0) is False"
+    echo "    assert error_of(0) == 'quantity must be positive'"
+    echo ""
+    echo "def test_accepts_one():"
+    echo "    assert validate(1) is True"
+    echo ""
+    echo "def test_importer_runs():"
+    echo "    run_import('rows.csv')"
+} > "$noassert/tests/test_orders.py"
+git -C "$noassert" add -A
+output="$(run_hook "$noassert")"
+if printf '%s' "$output" | node "$SCRIPT_DIR/assert-pretooluse.cjs" "test_orders.py" "no assertion"; then
+    pass "a new test with no assertion is called out"
+else
+    fail "a new test with no assertion is called out"
+    printf '%s
+' "$output" | sed 's/^/        /'
+fi
+
+# --- a test that asserts nothing real --------------------------------------------------
+tautology="$(new_repo tautology)"
+{
+    echo "def test_rejects_zero_quantity():"
+    echo "    assert validate(0) is False"
+    echo "    assert error_of(0) == 'quantity must be positive'"
+    echo ""
+    echo "def test_accepts_one():"
+    echo "    assert validate(1) is True"
+    echo ""
+    echo "def test_placeholder():"
+    echo "    assert True"
+} > "$tautology/tests/test_orders.py"
+git -C "$tautology" add -A
+output="$(run_hook "$tautology")"
+if printf '%s' "$output" | node "$SCRIPT_DIR/assert-pretooluse.cjs" "test_orders.py" "always true"; then
+    pass "an assertion that is always true is called out"
+else
+    fail "an assertion that is always true is called out"
+    printf '%s
+' "$output" | sed 's/^/        /'
+fi
+
 # --- production code is not policed by this gate -------------------------------------
 source_only="$(new_repo source-only)"
 echo "def validate(q): return True" > "$source_only/src/orders.py"

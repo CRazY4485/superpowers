@@ -181,6 +181,16 @@ check_tests() {
             lost=$((asserts_removed - asserts_added))
             warnings+="- ${file}: ${lost} assertion(s) removed while the tests stayed"$'\n'
         fi
+
+        # A test that cannot fail is not a test. These two are what that looks
+        # like in a diff: new tests carrying no assertion at all, and an
+        # assertion whose value is fixed by the code that wrote it.
+        if [ "$defs_added" -gt "$defs_removed" ] && [ "$asserts_added" -eq 0 ]; then
+            warnings+="- ${file}: a new test with no assertion - it passes whatever the code does"$'\n'
+        fi
+        if printf '%s\n' "$added" | grep -qE '(assert[[:space:]]+(True|true|1)[[:space:]]*$|assert[[:space:]]+1[[:space:]]*==[[:space:]]*1|assertTrue\((true|True|1)\)|expect\((true|1)\)\.(toBe|toEqual)\((true|1)\)|XCTAssertTrue\(true\))'; then
+            warnings+="- ${file}: an assertion that is always true - it proves nothing about the code"$'\n'
+        fi
     done < <(printf '%s\n' "$staged")
 
     if [ "$found" = "1" ]; then
