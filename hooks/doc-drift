@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+# Check a project's documents against what the repository actually did.
+#
+#   doc-drift <project-dir>
+#
+# doc-lint checks the metadata; this checks the metadata against history, which
+# is where the quiet failures live: a spec corrected after the plan was derived
+# from it, a plan still marked active while the work moved on, a delivery that
+# names a commit nobody made, a pointer to a plan that is finished, a path the
+# document still names that has since been renamed away.
+#
+# Prints "ERROR <file> <message>" / "WARN ..." lines; exits 1 on any ERROR.
+# Silent outside a git repository.
+
+set -uo pipefail
+
+PROJECT_DIR="${1:-${CLAUDE_PROJECT_DIR:-$PWD}}"
+STALE_COMMITS="${SUPERPOWERS_DOC_STALE_COMMITS:-30}"
+
+[ -d "$PROJECT_DIR" ] || exit 0
+git -C "$PROJECT_DIR" rev-parse --git-dir >/dev/null 2>&1 || exit 0
+
+status=0
+emit() {
+    printf '%s\n' "$1"
+    case "$1" in ERROR*) status=1 ;; esac
+}
+
+field_of() {
+    awk -v want="$2" '
+        NR == 1 && $0 != "---" { exit }
+        NR > 1 && $0 == "---" { exit }
+        NR > 1 {
+            idx = index($0, ":")
+            if (idx == 0) next
+            key = substr($0, 1, idx - 1)
+            val = substr($0, idx + 1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+            if (key == want) { print val; exit }
+        }
+    ' "$1"
+}
+
+last_commit_epoch() {
+    git -C "$PROJECT_DIR" log -1 --format=%ct -- "$1" 2>/dev/null || echo 0
+}
+
+last_commit_subject() {
+    git -C "$PROJECT_DIR" log -1 --format='%h %s' -- "$1" 2>/dev/null || true
+}
+
+documents=$(find "$PROJECT_DIR/docs" -type f -name '*.md' 2>/dev/null | sort || true)
+
+for doc in $documents; do
+    rel="${doc#"$PROJECT_DIR"/}"
+    [ "$(head -1 "$doc" 2>/dev/null || true)" = "---" ] || continue
+
+    doc_status=$(field_of "$doc" "status")
+    [ -n "$doc_status" ] || continue
+
+    # --- the document this one was derived from moved afterwards ----------------
+    derived=$(field_of "$doc" "derived-from")
+    if [ -n "$derived" ] && [ -f "${PROJECT_DIR}/${derived}" ]; then
+        doc_epoch=$(last_commit_epoch "$rel")
+        src_epoch=$(last_commit_epoch "$derived")
+        if [ "${src_epoch:-0}" -gt "${doc_epoch:-0}" ] && [ "$doc_status" != "superseded" ] \
+            && [ "$doc_status" != "abandoned" ] && [ "$doc_status" != "invalidated" ]; then
+            emit "WARN ${rel} its source moved afterwards: ${derived} changed in [$(last_commit_subject "$derived")] - re-read it before trusting this document, and if the premise changed use superpowers:reworking-earlier-stages"
+        fi
+    fi
+
+    # --- a delivery has to name a commit that exists -----------------------------
+    if [ "$doc_status" = "delivered" ]; then
+        delivered_by=$(field_of "$doc" "delivered-by")
+        if [ -n "$delivered_by" ]; then
+            ref="${delivered_by%% *}"
+            case "$ref" in
+                \#* | http*) ;;  # a PR reference, not a local object
+                *)
+                    if ! git -C "$PROJECT_DIR" rev-parse -q --verify "${ref}^{commit}" >/dev/null 2>&1; then
+                        emit "ERROR ${rel} delivered-by names ${ref}, which is not a commit in this repository"
+                    fi
+                    ;;
+            esac
+        fi
+    fi
+
+    # --- an active document the work has moved past -------------------------------
+    if [ "$doc_status" = "active" ] || [ "$doc_status" = "draft" ]; then
+        doc_epoch=$(last_commit_epoch "$rel")
+        if [ "${doc_epoch:-0}" -gt 0 ]; then
+            since=$(git -C "$PROJECT_DIR" rev-list --count "--since=@${doc_epoch}" HEAD 2>/dev/null || echo 0)
+            [ -n "$since" ] || since=0
+            if [ "$since" -gt "$STALE_COMMITS" ]; then
+                emit "WARN ${rel} still ${doc_status} after ${since} commits with no change of its own - is it delivered, superseded, or abandoned? An unmarked document is a landmine for the next session"
+            fi
+        fi
+    fi
+
+    # --- paths the document names that are gone ------------------------------------
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        case "$path" in
+            http* | *' '*) continue ;;
+        esac
+        [ -e "${PROJECT_DIR}/${path}" ] && continue
+        git -C "$PROJECT_DIR" cat-file -e "HEAD:${path}" 2>/dev/null && continue
+        emit "WARN ${rel} names \`${path}\`, which is not in the repository - renamed, or never written?"
+    done < <(grep -oE '`[A-Za-z0-9_./-]+\.[A-Za-z0-9]+`' "$doc" 2>/dev/null \
+        | tr -d '`' | grep -E '/' | sort -u || true)
+done
+
+# --- the resume pointer ------------------------------------------------------------
+state_file="${PROJECT_DIR}/.claude/context/state.md"
+if [ -f "$state_file" ]; then
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        if [ ! -f "${PROJECT_DIR}/${path}" ]; then
+            emit "WARN .claude/context/state.md points at ${path}, which does not exist"
+            continue
+        fi
+        pointed_status=$(field_of "${PROJECT_DIR}/${path}" "status")
+        case "$pointed_status" in
+            delivered | superseded | abandoned | invalidated)
+                emit "WARN .claude/context/state.md still points at ${path}, which is ${pointed_status} - the next session will pick up finished work"
+                ;;
+        esac
+    done < <(grep -oE 'docs/[A-Za-z0-9_./-]+\.md' "$state_file" 2>/dev/null | sort -u || true)
+fi
+
+exit "$status"

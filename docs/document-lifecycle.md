@@ -109,10 +109,51 @@ bash tests/hooks/test-decision-lint.sh
 17 assertions for the document front matter, including both sides of the
 adoption boundary, and 18 for the decision ledger, including the two number rules.
 
-## Not in this slice
+## Drift against history
 
-Detection that needs git history rather than metadata - a plan whose spec was
-committed after it, delivered tasks sitting on a superseded spec, and a
-`/superpowers:rework` command that walks the ripple and applies the marks - is
-the next slice. The metadata that makes those computable is what ships here,
-because retrofitting it across a project's existing documents is hand work.
+`hooks/doc-lint` checks the metadata. `hooks/doc-drift <project-dir>` checks the
+metadata against what the repository actually did - the quiet failures live
+there, not in the front matter:
+
+| Finding | Level |
+|---------|-------|
+| `delivered-by` names a commit that is not in this repository | ERROR |
+| A document's `derived-from` source was committed *after* it - the spec moved underneath the plan | WARN |
+| An `active` or `draft` document untouched while more than `SUPERPOWERS_DOC_STALE_COMMITS` commits (default 30) went past | WARN |
+| `.claude/context/state.md` points at a plan that is delivered, superseded, abandoned or missing | WARN |
+| A document names a backticked path that is in neither the working tree nor HEAD | WARN |
+
+Silent outside a git repository.
+
+The first one is the rework signal that metadata alone cannot produce: a spec
+corrected on Thursday leaves every plan derived from it on Tuesday resting on
+the old text, and nothing in either file says so.
+
+## Walking the ripple
+
+`/superpowers:rework <artifact>` drives the backward move end to end: state the
+trigger with its evidence, run both checks, build the ripple list in order
+(decisions, derived documents, tests, delivered commits), put the choice to the
+owner in outcome language, and only then apply the marks and record the
+decision. It never marks a document or retires a test on its own - clerical
+fixes excepted, and reported.
+
+`/superpowers:doc-audit` runs the same checks in survey mode, for when nothing
+is known to be wrong yet.
+
+## Tests
+
+```bash
+bash tests/hooks/test-doc-lint.sh     # metadata
+bash tests/hooks/test-doc-drift.sh    # metadata against history
+bash tests/hooks/test-decision-lint.sh
+```
+
+17 assertions for the document front matter, including both sides of the
+adoption boundary; 10 for drift; 18 for the decision ledger, including the two
+number rules.
+
+The `stage-rework` eval measures the behaviour the hooks cannot: told mid-task
+that the spec's assumption is false, the agent must name the evidence, mark the
+spec and plan rather than editing them quietly, check what is already built on
+the dead premise, and put the choice to the owner.

@@ -427,7 +427,25 @@ sübutlu tətik, artefaktların nişanlanması, **artıq təhvil verilmiş işin
 (sahibin qərarı, nəticələri ilə təqdim edilmiş), qayıdışın öz qərar qeydi, və
 `state.md`-də bərpa nöqtəsi. Rippl sırası: qərarlar → törəmə sənədlər → **testlər** → kod.
 
-`hooks/doc-lint` + `/superpowers:doc-audit` mexaniki hissəni tutur.
+**Tarixçəyə qarşı yoxlama** (`hooks/doc-drift`) — ön başlığın görə bilmədiyi hissə:
+
+| Tapıntı | Səviyyə |
+| --- | --- |
+| `delivered-by` bu repo-da olmayan commit-i göstərir | **xəta** |
+| Sənədin `derived-from` mənbəyi ondan **sonra** commit olunub (spec planın altından sürüşüb) | xəbərdarlıq |
+| `active` sənədə toxunulmadan 30+ commit keçib | xəbərdarlıq |
+| `state.md` təhvil verilmiş/ləğv edilmiş plana işarə edir | xəbərdarlıq |
+| Sənəd nə iş ağacında, nə HEAD-də olmayan fayl yolu adlandırır | xəbərdarlıq |
+
+Birincisi metadata-nın təkbaşına verə bilmədiyi **rework siqnalıdır**: cümə axşamı
+düzəldilmiş spec, çərşənbə axşamı ondan törəmiş planı köhnə mətn üzərində qoyur və
+heç bir fayl bunu demir.
+
+`/superpowers:rework <artefakt>` geriyə hərəkəti uçdan-uca aparır: sübutlu tətik →
+hər iki yoxlama → rippl siyahısı (qərarlar, törəmə sənədlər, testlər, təhvil verilmiş
+commit-lər) → sahibə nəticə dilində seçim → yalnız bundan sonra nişanlar və qərar qeydi.
+`/superpowers:doc-audit` isə eyni yoxlamaları "hələ heç nə məlum deyil" rejimində işlədir.
+
 Detallar: `docs/document-lifecycle.md`.
 
 ## Hansı qovluqlar əhəmiyyətlidir
@@ -471,12 +489,13 @@ konfliktləri çıxacaq.
 - `hooks/test-integrity` — testin zəiflədilməsi qapısı
 - `hooks/decision-lint`, `hooks/decision-gate` — qərar qeydlərinin linteri və commit qapısı
 - `hooks/doc-lint` — spec/plan ön başlıqlarının və qərar bağlarının linteri
+- `hooks/doc-drift` — sənədlərin git tarixçəsinə qarşı yoxlanışı
 - `hooks/commit-gates` — üç commit yoxlaması bir prosesdə (sirr, test bütövlüyü, qərar qeydləri); `commit-gate`/`test-integrity`/`decision-gate` nazik sarğılardır
 - `hooks/brief-check` — sub-agent brifinqinin tamlıq yoxlaması
 - `plugin-evals/` — davranış eval-ları (4 case), `docs/evals.md`
-- `commands/` — `context-init`, `context-save`, `interview-status`, `interview-close`, `checkpoints`, `decision-audit`, `constitution-init`, `doc-audit`
+- `commands/` — `context-init`, `context-save`, `interview-status`, `interview-close`, `checkpoints`, `decision-audit`, `constitution-init`, `doc-audit`, `rework`
 - `docs/project-context.md`, `docs/interview-ledger.md`, `docs/git-checkpoints.md` — sənədlər
-- `tests/hooks/test-project-context.sh`, `test-interview-ledger.sh`, `test-git-checkpoint.sh`, `test-commit-nudge.sh`, `test-commit-gate.sh`, `test-research-nudge.sh`, `test-test-integrity.sh`, `test-decision-lint.sh`, `test-brief-check.sh`, `test-doc-lint.sh` — testlər
+- `tests/hooks/test-project-context.sh`, `test-interview-ledger.sh`, `test-git-checkpoint.sh`, `test-commit-nudge.sh`, `test-commit-gate.sh`, `test-research-nudge.sh`, `test-test-integrity.sh`, `test-decision-lint.sh`, `test-brief-check.sh`, `test-doc-lint.sh`, `test-doc-drift.sh` — testlər
 
 **Upstream fayllarına toxunulan yerlər** (merge zamanı konflikt ehtimalı olan siyahı —
 yenilik gələndə əvvəlcə bunlara bax):
