@@ -307,6 +307,61 @@ sadə fetch bəzən doğru seçimdir.
 **Eval:** `plugin-evals/official-docs` — "hansı hook-lar kontekst inject edə bilir,
 dəqiq JSON şəkli nədir?" sualına yaddaşdan qəti cavab verilməsi uğursuzluq sayılır.
 
+## Test bütövlüyü və qərar bütövlüyü (fork-a xas)
+
+### Testin zəiflədilməsinin qarşısı
+
+Müşahidə etdiyin hal: test dəyişikliyə mane olur, ona görə test skip edilir,
+silinir, `.only()` ilə təcrid olunur və ya assertion-ları çıxarılır — iş "keçir",
+suite yaşıl qalır. Kod oxumayan sahib üçün yaşıl suite ilə işləyən proqram
+arasındakı fərq görünmür. Ona görə bu **qapıdır**, tövsiyə deyil.
+
+`hooks/test-integrity` commit anında yalnız **test fayllarının** staged diff-inə baxır:
+
+| Siqnal | Nəticə |
+| --- | --- |
+| Yeni skip/xfail/`.only`/`fit` markerləri (net artım) | **blok** |
+| Test funksiyalarının net itkisi | **blok** |
+| Test qalıb, assertion-lar azalıb | xəbərdarlıq |
+
+Net say hesablandığı üçün **rename və refaktor** sərbəst keçir. Qanuni ləğv üçün:
+`pragma: test-change <səbəb>` — səssiz silmə əvəzinə qeyd olunmuş qərar.
+Mühakimə tərəfi: `superpowers:keeping-tests-honest` (tolerans genişləndirmək,
+sınıq çıxışa uyğun assertion yazmaq, exception udmaq — regex bunları görmür).
+
+### Qərar ziddiyyətləri və əsaslandırma
+
+Qərarlar struktur qeyd formatına keçdi:
+
+```
+## D0011 | 2026-04-10 | active | scope: delivery/retries
+**Decision:** ...
+**Why:** ...
+**Evidence:** sahibin öz sözləri + tarix / ölçmə / sənəd bölməsi / rəsmi URL / fayl:sətir
+**Supersedes:** D0009
+```
+
+`hooks/decision-lint` + `hooks/decision-gate` (commit anında):
+
+| Tapıntı | Nəticə |
+| --- | --- |
+| `Why` və ya `Evidence` yoxdur | **blok** |
+| Evidence fərziyyədir (`probably`, `I assume`, `I think`, `seems`) | **blok** |
+| Təkrar ID, mövcud olmayan `Supersedes` hədəfi, birtərəfli supersession | **blok** |
+| Eyni scope-da iki aktiv qərar | xəbərdarlıq (uzlaşdırma tələb olunur) |
+
+**`superpowers:reconciling-decisions`** linter-in görə bilmədiyini daşıyır: qərar
+yazmazdan əvvəl nəyi ziddiyyətə saldığını axtarmaq (qərar jurnalı, sənədlər, kod və
+**testlər** — köhnə davranışı yoxlayan test həmin qərarın icra olunmuş formasıdır),
+toqquşmanı **sahibin dilində** təqdim etmək (hər iki qərarın tarixi və səbəbi,
+niyə ikisi birlikdə mümkün deyil, nəticələri ilə variantlar, tövsiyə), sonra
+supersession-u **və rippl-i** qeyd etmək — köhnə qərarı sitat edən sənəd, plan,
+spec və testlərin siyahısı.
+
+`/superpowers:decision-audit` hər iki yarını layihə üzərində işlədir.
+
+Detallar: `docs/test-integrity.md`, `docs/decision-integrity.md`.
+
 ## Hansı qovluqlar əhəmiyyətlidir
 
 Claude Code üçün yalnız bunlar işləyir:
@@ -337,13 +392,17 @@ konfliktləri çıxacaq.
 - `skills/investigating-with-git-history/` — bisect, `log -S`, blame ilə sübut toplamaq
 - `skills/resolving-merge-conflicts/` — konfliktləri niyyət səviyyəsində həll etmək
 - `skills/researching-with-official-docs/` — rəsmi sənəd + Playwright MCP ilə araşdırma
+- `skills/keeping-tests-honest/` — testi zəiflətmə təzyiqinə qarşı
+- `skills/reconciling-decisions/` — qərar ziddiyyətləri və əsaslandırma intizamı
 - `hooks/project-context`, `hooks/context-nudge`, `hooks/interview-context` — inject və xatırlatma hook-ları
 - `hooks/git-checkpoint`, `hooks/checkpoint-turn`, `hooks/git-guard`, `hooks/commit-nudge` — checkpoint mühərriki, turluq snapshot, təhlükəli əmr qoruyucusu, commit xatırlatması
 - `hooks/commit-gate`, `hooks/branch-guard`, `hooks/research-nudge` — sirr/konflikt/böyük fayl qapısı, default branch və araşdırma mənbəyi xatırlatmaları
+- `hooks/test-integrity` — testin zəiflədilməsi qapısı
+- `hooks/decision-lint`, `hooks/decision-gate` — qərar qeydlərinin linteri və commit qapısı
 - `plugin-evals/` — davranış eval-ları (4 case), `docs/evals.md`
-- `commands/` — `context-init`, `context-save`, `interview-status`, `interview-close`, `checkpoints`
+- `commands/` — `context-init`, `context-save`, `interview-status`, `interview-close`, `checkpoints`, `decision-audit`
 - `docs/project-context.md`, `docs/interview-ledger.md`, `docs/git-checkpoints.md` — sənədlər
-- `tests/hooks/test-project-context.sh`, `test-interview-ledger.sh`, `test-git-checkpoint.sh`, `test-commit-nudge.sh`, `test-commit-gate.sh`, `test-research-nudge.sh` — testlər
+- `tests/hooks/test-project-context.sh`, `test-interview-ledger.sh`, `test-git-checkpoint.sh`, `test-commit-nudge.sh`, `test-commit-gate.sh`, `test-research-nudge.sh`, `test-test-integrity.sh`, `test-decision-lint.sh` — testlər
 
 **Upstream fayllarına toxunulan yerlər** (merge zamanı konflikt ehtimalı olan siyahı —
 yenilik gələndə əvvəlcə bunlara bax):

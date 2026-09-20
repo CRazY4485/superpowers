@@ -44,6 +44,11 @@ few questions - and every answer that gets postponed - belongs in the ledger:
 partner's own words as it lands, before you respond to it, and run the ledger's
 coverage gate before you present a design, write a spec, or summarize.
 
+When an answer decides something, it becomes a decision record - with the reason
+and the source it rests on, never an assumed one - and before you write it, look
+for what it contradicts: `superpowers:reconciling-decisions`. A design built on
+a decision that quietly reverses an earlier one is a design nobody can trust.
+
 <HARD-GATE>
 Before taking any implementation action, including invoking an
 implementation skill, writing product code, scaffolding, installing

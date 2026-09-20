@@ -78,6 +78,12 @@
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd\" test-integrity",
             "shell": "bash",
             "async": false
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd\" decision-gate",
+            "shell": "bash",
+            "async": false
           }
         ]
       },

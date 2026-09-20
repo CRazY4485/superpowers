@@ -58,10 +58,14 @@ after finishing anything, `state.md` must already describe the new position.
 
 - **state.md is a snapshot.** Overwrite it. If it grows past ~40 lines, settled
   material belongs in `decisions.md` or `project.md`, or belongs deleted.
-- **decisions.md is append-only.** One entry per decision:
-  `## YYYY-MM-DD - <the decision>` followed by `**Why:**`, `**Rejected:**`,
-  `**Implications:**`. Superseding a decision means a new entry that names the
-  old one, never an edit to history.
+- **decisions.md is append-only.** One entry per decision, headed
+  `## D0007 | YYYY-MM-DD | active | scope: <area>/<sub-area>`, followed by
+  `**Decision:**`, `**Why:**`, `**Evidence:**`, and optionally `**Rejected:**`,
+  `**Implications:**`, `**Supersedes:**`. Every entry needs a reason and a
+  source - a commit whose decisions lack them is blocked. Superseding means a
+  new entry naming the old one *and* marking the old one `superseded`, never an
+  edit to history. Before writing one, look for what it contradicts:
+  `superpowers:reconciling-decisions`.
 - **Facts, not narration.** "Auth: JWT in an HttpOnly cookie, 15 min expiry"
   beats "we discussed auth and agreed on an approach".
 - **Never write secrets.** No tokens, keys, passwords, or private URLs. These

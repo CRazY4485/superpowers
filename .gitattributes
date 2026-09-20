@@ -12,6 +12,8 @@ hooks/commit-gate text eol=lf
 hooks/branch-guard text eol=lf
 hooks/research-nudge text eol=lf
 hooks/test-integrity text eol=lf
+hooks/decision-lint text eol=lf
+hooks/decision-gate text eol=lf
 
 # Ensure the polyglot wrapper keeps LF (it's parsed by both cmd and bash)
 *.cmd text eol=lf

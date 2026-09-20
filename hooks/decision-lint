@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# Lint decision records for the things that make a decision log untrustworthy:
+# missing justification, evidence that is really an assumption, duplicate or
+# dangling ids, supersession recorded on one side only, and two live decisions
+# claiming the same scope.
+#
+#   decision-lint <file> [<file>...]
+#
+# Prints one finding per line - "ERROR <file>:<line> <message>" or "WARN ..." -
+# and exits 1 when any ERROR was found, 0 otherwise.
+#
+# Entry format:
+#   ## D0007 | 2026-09-20 | active | scope: billing/pricing
+#   **Decision:** one line, what was decided
+#   **Why:** the reason it was decided
+#   **Evidence:** where that reason comes from
+#   **Rejected:** optional
+#   **Supersedes:** D0004 (optional)
+
+set -uo pipefail
+
+[ "$#" -gt 0 ] || { echo "usage: decision-lint <file>..." >&2; exit 2; }
+
+status=0
+for file in "$@"; do
+    [ -f "$file" ] || continue
+    findings=$(awk -v FILE="$file" '
+    function flush_entry() {
+        if (current_id == "") return
+        if (!seen_decision) printf "ERROR %s:%d %s is missing **Decision:**\n", FILE, current_line, current_id
+        if (!seen_why)      printf "ERROR %s:%d %s is missing **Why:** - a decision without a stated reason cannot be reviewed\n", FILE, current_line, current_id
+        if (!seen_evidence) printf "ERROR %s:%d %s is missing **Evidence:** - name the source the reason rests on\n", FILE, current_line, current_id
+        current_id = ""
+    }
+
+    /^## / {
+        flush_entry()
+        heading = $0
+        sub(/^## /, "", heading)
+        if (heading !~ /^D[0-9][0-9][0-9][0-9] \| [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] \| (active|superseded|withdrawn) \| scope: .+$/) {
+            printf "ERROR %s:%d malformed decision heading: %s\n", FILE, NR, heading
+            current_id = ""
+            next
+        }
+        # The separator is a regex, so the pipe must be escaped or it reads as
+        # alternation and every field comes out wrong.
+        n = split(heading, parts, " \\| ")
+        id = parts[1]
+        date = parts[2]
+        state = parts[3]
+        scope = parts[4]
+        sub(/^scope: /, "", scope)
+
+        if (id in id_line) {
+            printf "ERROR %s:%d duplicate decision id %s (already used at line %d)\n", FILE, NR, id, id_line[id]
+        }
+        id_line[id] = NR
+        id_status[id] = state
+        id_scope[id] = scope
+        order[++count] = id
+
+        if (state == "active") {
+            if (scope in active_scope_id) {
+                printf "WARN %s:%d %s and %s are both active on scope %s - reconcile them or narrow the scopes\n", FILE, NR, active_scope_id[scope], id, scope
+            } else {
+                active_scope_id[scope] = id
+            }
+        }
+
+        current_id = id
+        current_line = NR
+        seen_decision = 0; seen_why = 0; seen_evidence = 0
+        next
+    }
+
+    current_id != "" && /^\*\*Decision:\*\*/ { seen_decision = 1 }
+
+    current_id != "" && /^\*\*(Why|Evidence):\*\*/ {
+        field = $0
+        sub(/^\*\*/, "", field)
+        sub(/:\*\*.*$/, "", field)
+        body = $0
+        sub(/^\*\*[A-Za-z]+:\*\*[[:space:]]*/, "", body)
+        if (field == "Why") seen_why = 1
+        if (field == "Evidence") seen_evidence = 1
+        lowered = tolower(body)
+        if (lowered ~ /(^| )(i assume|assumed|assumption|probably|presumably|i think|i believe|guess|guessing|should be fine|seems likely)( |$|\.|,)/) {
+            printf "ERROR %s:%d %s rests on an assumption, not evidence: \"%s\"\n", FILE, NR, current_id, body
+        }
+        if (field == "Evidence" && length(body) < 3) {
+            printf "ERROR %s:%d %s has an empty **Evidence:** line\n", FILE, NR, current_id
+        }
+    }
+
+    current_id != "" && /^\*\*Supersedes:\*\*/ {
+        target = $0
+        sub(/^\*\*Supersedes:\*\*[[:space:]]*/, "", target)
+        gsub(/[^D0-9]/, " ", target)
+        split(target, targets, " ")
+        for (t in targets) {
+            if (targets[t] ~ /^D[0-9][0-9][0-9][0-9]$/) {
+                supersedes[current_id] = targets[t]
+                supersedes_line[current_id] = NR
+            }
+        }
+    }
+
+    END {
+        flush_entry()
+        for (id in supersedes) {
+            target = supersedes[id]
+            if (!(target in id_line)) {
+                printf "ERROR %s:%d %s supersedes %s, which is not in this log\n", FILE, supersedes_line[id], id, target
+                continue
+            }
+            superseded_by[target] = id
+            if (id_status[target] != "superseded") {
+                printf "ERROR %s:%d %s is superseded by %s but is still marked %s\n", FILE, id_line[target], target, id, id_status[target]
+            }
+        }
+        for (i = 1; i <= count; i++) {
+            id = order[i]
+            if (id_status[id] == "superseded" && !(id in superseded_by)) {
+                printf "WARN %s:%d %s is marked superseded but nothing in this log supersedes it\n", FILE, id_line[id], id
+            }
+        }
+    }
+    ' "$file")
+
+    if [ -n "$findings" ]; then
+        printf '%s\n' "$findings"
+        printf '%s\n' "$findings" | grep -q '^ERROR ' && status=1
+    fi
+done
+
+exit "$status"
