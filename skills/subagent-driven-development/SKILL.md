@@ -259,7 +259,10 @@ and fix-round diffs need it.
   know; (4) your resolution of any ambiguity you noticed in the brief;
   (5) the report-file path and report contract. Exact values (numbers,
   magic strings, signatures, test cases) appear only in the brief. Never
-  make a subagent read the whole plan file.
+  make a subagent read the whole plan file. Check the dispatch against
+  `superpowers:briefing-subagents` before sending it: the boundary (what it must
+  not touch), the verification command, and the report format are the parts most
+  often left implicit, and a subagent cannot ask.
 - **Report file:** name the implementer's report file after the brief
   (brief `…/task-N-brief.md` → report `…/task-N-report.md`) and put it in
   the dispatch prompt. The implementer writes the full report there and

@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# PreToolUse hook: check what a subagent is being handed before it starts.
+#
+# A subagent begins with none of this session's context: not the plan, not the
+# decisions, not the conversation where the boundaries were set. Whatever the
+# brief omits, it invents. This names the omissions while the brief can still
+# be fixed.
+#
+# Never blocks - some dispatches really are one-liners over read-only work.
+#
+# Prints a PreToolUse payload on stdout, or nothing. Always exits 0.
+
+set -uo pipefail
+
+MIN_BRIEF_CHARS="${SUPERPOWERS_BRIEF_MIN_CHARS:-280}"
+
+payload=$(cat 2>/dev/null || true)
+[ -n "$payload" ] || exit 0
+command -v node >/dev/null 2>&1 || exit 0
+
+sep=$'\x1f'
+parsed=$(printf '%s' "$payload" | node -e '
+let raw = "";
+process.stdin.on("data", (d) => { raw += d; });
+process.stdin.on("end", () => {
+  try {
+    const p = JSON.parse(raw);
+    const input = p.tool_input || {};
+    const brief = [input.prompt, input.description].filter(Boolean).join("\n");
+    process.stdout.write(`${p.tool_name || ""}\u001f${brief}`);
+  } catch (error) {
+    process.stdout.write("");
+  }
+});' 2>/dev/null)
+
+[ -n "$parsed" ] || exit 0
+tool_name="${parsed%%${sep}*}"
+brief="${parsed#*${sep}}"
+
+case "$tool_name" in
+    Agent | Task) ;;
+    *) exit 0 ;;
+esac
+
+[ -n "$brief" ] || exit 0
+
+has() {
+    printf '%s' "$brief" | grep -qiE "$1"
+}
+
+missing=""
+
+if ! has '(acceptance|verif|test (command|suite|passes)|passes|pytest|npm (run )?test|go test|cargo test|assert)'; then
+    missing+="- **how to verify**: the command that proves it worked, and what the output must show. Without it the agent reports success from having finished, not from evidence."$'\n'
+fi
+
+if ! has '(do not|don'"'"'t|out of scope|only (touch|change|edit)|scope[:[:space:]]|limited to|stay within|leave .* alone)'; then
+    missing+="- **the scope boundary**: which files or modules are in play, and what it must not touch. An unbounded brief produces unbounded diffs."$'\n'
+fi
+
+if ! has '(\.claude/context|context file|state\.md|decisions\.md|project\.md|plan|spec|requirement|constitution)'; then
+    missing+="- **what to read first**: the plan step, the spec, the decisions and the project context that bind this task. The subagent starts cold and will otherwise reinvent them."$'\n'
+fi
+
+if ! has '(report|return|hand back|summar|output|tell me|evidence)'; then
+    missing+="- **what to report back**: the diff, the verbatim test output, and anything found that was out of scope."$'\n'
+fi
+
+brief_length=${#brief}
+if [ "$brief_length" -lt "$MIN_BRIEF_CHARS" ]; then
+    missing+="- **substance**: this brief is ${brief_length} characters. A subagent starts cold - it has none of this conversation."$'\n'
+fi
+
+[ -n "$missing" ] || exit 0
+
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+message="This subagent brief looks incomplete. Missing:"$'\n'
+message+="${missing}"
+message+="If the task really is that small and read-only, dispatch it as is. Otherwise fill the gaps first - see superpowers:briefing-subagents."
+escaped=$(escape_for_json "$message")
+
+printf '{\n'
+printf '  "hookSpecificOutput": {\n'
+printf '    "hookEventName": "PreToolUse",\n'
+printf '    "additionalContext": "%s"\n' "$escaped"
+printf '  }\n'
+printf '}\n'
+
+exit 0

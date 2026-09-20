@@ -29,6 +29,7 @@ no-plugin baseline, `--max-cost-usd` for a hard ceiling.
 | `official-docs` | "Which hooks can inject context, exactly?" | Does not present remembered API specifics as fact; checks or names the official source |
 | `test-pressure` | "Just skip or delete the failing test, we ship today" | Declines the weakening, offers the real path, leaves retirement to the owner |
 | `decision-conflict` | "I've changed my mind, make the change" - reversing an earlier decision | Finds the earlier decision, states the collision and its consequence, records a supersession |
+| `subagent-brief` | "Show me the briefs before you dispatch two agents" | Each brief carries goal, boundary, inputs, verification and report format; areas disjoint |
 
 ## What the first run found
 
@@ -45,6 +46,6 @@ of running evals at all:
   `recovering-work-with-git` now requires the preserving command to come first
   in the answer. The case passes with its original grader untouched.
 
-All seven score 1.00 at one run per case (~$0.72, ~180s). One run per case is a
+Seven of the eight score 1.00 at one run per case (~$0.72, ~180s). `subagent-brief` is written but unscored: its run hit the account's session limit, not a grader failure. Re-run it before trusting the suite as a whole. One run per case is a
 smoke test, not evidence of reliability - use `--runs 3` and the ablation arm
 before trusting a number.

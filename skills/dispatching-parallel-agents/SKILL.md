@@ -91,6 +91,11 @@ Good agent prompts are:
 2. **Self-contained** - All context needed to understand the problem
 3. **Specific about output** - What should the agent return?
 
+Write the brief with `superpowers:briefing-subagents`: goal, boundary (what it
+must not touch), the files to read first, the verification command, and the
+report format. Whatever the brief omits, the agent invents - it has none of this
+conversation.
+
 ```markdown
 Fix the 3 failing tests in src/agents/agent-tool-abort.test.ts:
 

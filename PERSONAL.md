@@ -362,6 +362,36 @@ spec və testlərin siyahısı.
 
 Detallar: `docs/test-integrity.md`, `docs/decision-integrity.md`.
 
+## Kodlaşdırma standartı və sub-agent brifinqi (fork-a xas)
+
+**Konstitusiya.** Sənin sənədin `skills/following-the-architectural-constitution/ARCHITECTURAL_CONSTITUTION.md`
+kimi **dəyişdirilmədən** daşınıb; yuxarısına yalnız bir şərh əlavə olunub: sənəddəki
+`memory-bank/…`, `CLAUDE.md`, `.claude/rules/…` yollarının bu framework-ün
+`.claude/context/` düzümündəki qarşılığı. Sənədin mətninə toxunulmayıb.
+
+Skill (`superpowers:following-the-architectural-constitution`) girişi verir: nə vaxt
+bağlayıcıdır, bölmələrin xəritəsi və **kənaraçıxma proseduru** — uyğun olmayan kodu
+yazmazdan **əvvəl** dayan, sahibə nəticə dilində izah et, qərarı səbəbi və əhatəsi ilə
+qeyd et, və yalnız adı çəkilən hala məhdudlaşdır. Qeyd olunmamış kənaraçıxma kod
+bazasının yeni vərdişinə çevrilir.
+
+`/superpowers:constitution-init` — sənədi layihəyə köçürür, sənəddə qəsdən olmayan
+layihə faktlarını (stack, əmrlər, büdcələr, pul təsviri) `.claude/context/project.md`-ə
+yazır və qəbulu qərar kimi qeyd edir.
+
+**Sub-agent brifinqi.** Sub-agent bu söhbətin heç bir hissəsini görmür — brifinqdə
+olmayanı **uydurur**. `superpowers:briefing-subagents` beş hissəni tələb edir:
+məqsəd (nəticə dilində), **sərhəd** (nəyə toxunmamalı), əvvəlcə oxunacaqlar (yol ilə
+adlandırılmış), yoxlama əmri və çıxışında nə görünməli, hesabat formatı (diff +
+sözbəsöz test çıxışı). Paralel göndərişdə sərhədlər kəsişməməlidir, ortaq kontekst
+hər brifinqdə təkrarlanmalıdır.
+
+`hooks/brief-check` (`PreToolUse`, `Agent|Task`) göndərişdən əvvəl brifinqi oxuyur və
+çatışmayanları sadalayır. Bloklamır — bəzi göndərişlər həqiqətən bir sətirlik, yalnız
+oxuma işidir.
+
+Detallar: `docs/standards-and-briefs.md`.
+
 ## Hansı qovluqlar əhəmiyyətlidir
 
 Claude Code üçün yalnız bunlar işləyir:
@@ -394,15 +424,18 @@ konfliktləri çıxacaq.
 - `skills/researching-with-official-docs/` — rəsmi sənəd + Playwright MCP ilə araşdırma
 - `skills/keeping-tests-honest/` — testi zəiflətmə təzyiqinə qarşı
 - `skills/reconciling-decisions/` — qərar ziddiyyətləri və əsaslandırma intizamı
+- `skills/following-the-architectural-constitution/` — kodlaşdırma standartı (sənin sənədin)
+- `skills/briefing-subagents/` — sub-agent brifinqinin beş hissəsi
 - `hooks/project-context`, `hooks/context-nudge`, `hooks/interview-context` — inject və xatırlatma hook-ları
 - `hooks/git-checkpoint`, `hooks/checkpoint-turn`, `hooks/git-guard`, `hooks/commit-nudge` — checkpoint mühərriki, turluq snapshot, təhlükəli əmr qoruyucusu, commit xatırlatması
 - `hooks/commit-gate`, `hooks/branch-guard`, `hooks/research-nudge` — sirr/konflikt/böyük fayl qapısı, default branch və araşdırma mənbəyi xatırlatmaları
 - `hooks/test-integrity` — testin zəiflədilməsi qapısı
 - `hooks/decision-lint`, `hooks/decision-gate` — qərar qeydlərinin linteri və commit qapısı
+- `hooks/brief-check` — sub-agent brifinqinin tamlıq yoxlaması
 - `plugin-evals/` — davranış eval-ları (4 case), `docs/evals.md`
-- `commands/` — `context-init`, `context-save`, `interview-status`, `interview-close`, `checkpoints`, `decision-audit`
+- `commands/` — `context-init`, `context-save`, `interview-status`, `interview-close`, `checkpoints`, `decision-audit`, `constitution-init`
 - `docs/project-context.md`, `docs/interview-ledger.md`, `docs/git-checkpoints.md` — sənədlər
-- `tests/hooks/test-project-context.sh`, `test-interview-ledger.sh`, `test-git-checkpoint.sh`, `test-commit-nudge.sh`, `test-commit-gate.sh`, `test-research-nudge.sh`, `test-test-integrity.sh`, `test-decision-lint.sh` — testlər
+- `tests/hooks/test-project-context.sh`, `test-interview-ledger.sh`, `test-git-checkpoint.sh`, `test-commit-nudge.sh`, `test-commit-gate.sh`, `test-research-nudge.sh`, `test-test-integrity.sh`, `test-decision-lint.sh`, `test-brief-check.sh` — testlər
 
 **Upstream fayllarına toxunulan yerlər** (merge zamanı konflikt ehtimalı olan siyahı —
 yenilik gələndə əvvəlcə bunlara bax):

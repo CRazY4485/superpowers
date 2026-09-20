@@ -14,6 +14,7 @@ hooks/research-nudge text eol=lf
 hooks/test-integrity text eol=lf
 hooks/decision-lint text eol=lf
 hooks/decision-gate text eol=lf
+hooks/brief-check text eol=lf
 
 # Ensure the polyglot wrapper keeps LF (it's parsed by both cmd and bash)
 *.cmd text eol=lf
