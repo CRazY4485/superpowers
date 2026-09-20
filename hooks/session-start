@@ -26,6 +26,14 @@ escape_for_json() {
 using_superpowers_escaped=$(escape_for_json "$using_superpowers_content")
 session_context="<EXTREMELY_IMPORTANT>\nYou have superpowers.\n\n**Below is the full content of your 'superpowers:using-superpowers' skill - your introduction to using skills. For all other skills, use the 'Skill' tool:**\n\n${using_superpowers_escaped}\n</EXTREMELY_IMPORTANT>"
 
+# Durable per-project context (<project>/.claude/context/), when the project
+# keeps any. Collected by a separate hook script so it can be tested on its own.
+project_context=$(bash "${PLUGIN_ROOT}/hooks/project-context" 2>/dev/null || true)
+if [ -n "$project_context" ]; then
+    project_context_escaped=$(escape_for_json "$project_context")
+    session_context="${session_context}\n\n${project_context_escaped}"
+fi
+
 # Output context injection as JSON.
 # Cursor hooks expect additional_context (snake_case).
 # Claude Code hooks expect hookSpecificOutput.additionalContext (nested).

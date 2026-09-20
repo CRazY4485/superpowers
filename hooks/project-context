@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# Collects a project's durable context for injection at session start.
+#
+# Reads <project>/.claude/context/:
+#   project.md   - stable profile (stack, commands, conventions)
+#   state.md     - where the work stands right now
+#   decisions.md - append-only decision log (summarised, never inlined)
+#
+# Prints a plain-text block on stdout, or nothing when the project has no
+# context directory. Never fails the session: exits 0 whatever it finds.
+
+set -uo pipefail
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+CONTEXT_DIR="${PROJECT_DIR}/.claude/context"
+
+[ -d "$CONTEXT_DIR" ] || exit 0
+
+MAX_PROFILE_CHARS="${SUPERPOWERS_CONTEXT_MAX_PROFILE:-3000}"
+MAX_STATE_CHARS="${SUPERPOWERS_CONTEXT_MAX_STATE:-4000}"
+DECISIONS_LISTED="${SUPERPOWERS_CONTEXT_DECISIONS:-3}"
+
+file_mtime() {
+    stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0
+}
+
+format_epoch() {
+    date -d "@$1" '+%Y-%m-%d %H:%M' 2>/dev/null \
+        || date -r "$1" '+%Y-%m-%d %H:%M' 2>/dev/null \
+        || echo "unknown"
+}
+
+# emit_file <path> <heading> <max-chars>
+emit_file() {
+    local path="$1" heading="$2" max="$3"
+    [ -f "$path" ] || return 0
+
+    local size content
+    size=$(wc -c < "$path" | tr -d ' ')
+    content=$(head -c "$max" "$path")
+
+    printf '### %s\n' "$heading"
+    printf '%s\n' "$content"
+    if [ "$size" -gt "$max" ]; then
+        printf '[truncated: first %s of %s bytes - read %s for the rest]\n' \
+            "$max" "$size" ".claude/context/$(basename "$path")"
+    fi
+    printf '\n'
+}
+
+body=""
+profile_file="${CONTEXT_DIR}/project.md"
+state_file="${CONTEXT_DIR}/state.md"
+decisions_file="${CONTEXT_DIR}/decisions.md"
+
+if [ -f "$profile_file" ]; then
+    body+="$(emit_file "$profile_file" "project.md - project profile" "$MAX_PROFILE_CHARS")"$'\n'
+fi
+
+if [ -f "$state_file" ]; then
+    state_heading="state.md - current state (updated $(format_epoch "$(file_mtime "$state_file")"))"
+    body+="$(emit_file "$state_file" "$state_heading" "$MAX_STATE_CHARS")"$'\n'
+fi
+
+if [ -f "$decisions_file" ]; then
+    entry_count=$(grep -c '^## ' "$decisions_file" 2>/dev/null || true)
+    [ -n "$entry_count" ] || entry_count=0
+    recent=$(grep '^## ' "$decisions_file" 2>/dev/null | tail -n "$DECISIONS_LISTED" | sed 's/^## /- /' || true)
+    body+="### decisions.md - ${entry_count} entries, most recent:"$'\n'
+    if [ -n "$recent" ]; then
+        body+="${recent}"$'\n'
+    fi
+    body+="Read .claude/context/decisions.md before revisiting any settled decision."$'\n\n'
+fi
+
+# Anything else the project keeps in there is worth knowing about by name.
+others=$(find "$CONTEXT_DIR" -maxdepth 1 -type f -name '*.md' 2>/dev/null \
+    | sed 's#.*/##' \
+    | grep -vx -e 'project.md' -e 'state.md' -e 'decisions.md' \
+    | sort | tr '\n' ' ' || true)
+if [ -n "${others// /}" ]; then
+    body+="### other context files: ${others}"$'\n\n'
+fi
+
+# Nothing readable in the directory - stay silent rather than inject an
+# empty block.
+if [ -z "${body//[[:space:]]/}" ]; then
+    exit 0
+fi
+
+printf '<PROJECT_CONTEXT dir=".claude/context">\n'
+printf 'Durable context for this project, written by earlier sessions. Trust it over your\n'
+printf 'assumptions, correct it when reality disagrees, and keep it current with the\n'
+printf 'superpowers:maintaining-project-context skill.\n\n'
+printf '%s' "$body"
+printf '</PROJECT_CONTEXT>\n'
+
+exit 0

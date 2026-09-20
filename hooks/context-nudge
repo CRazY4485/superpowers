@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Stop hook: reminds the agent to refresh project context that has fallen
+# behind the work.
+#
+# Only projects that opted in - by having .claude/context/state.md - are ever
+# nudged, and a nudge is throttled so it cannot fire every turn.
+#
+# Prints a Stop hook JSON payload on stdout, or nothing. Always exits 0.
+
+set -uo pipefail
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+STATE_FILE="${PROJECT_DIR}/.claude/context/state.md"
+
+[ -f "$STATE_FILE" ] || exit 0
+
+THROTTLE_SECONDS="${SUPERPOWERS_NUDGE_THROTTLE_SECONDS:-1800}"
+DIRTY_SECONDS="${SUPERPOWERS_NUDGE_DIRTY_SECONDS:-5400}"
+STATE_DIR="${SUPERPOWERS_NUDGE_STATE_DIR:-${TMPDIR:-/tmp}/superpowers-context-nudge}"
+
+file_mtime() {
+    stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0
+}
+
+now=$(date +%s)
+state_mtime=$(file_mtime "$STATE_FILE")
+
+reason=""
+if git -C "$PROJECT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+    last_commit=$(git -C "$PROJECT_DIR" log -1 --format=%ct 2>/dev/null || echo 0)
+    [ -n "$last_commit" ] || last_commit=0
+    dirty=$(git -C "$PROJECT_DIR" status --porcelain -uno 2>/dev/null | head -c 1)
+
+    if [ "$last_commit" -gt "$state_mtime" ]; then
+        reason="commits have landed since it was last written"
+    elif [ -n "$dirty" ] && [ $((now - state_mtime)) -gt "$DIRTY_SECONDS" ]; then
+        reason="the working tree has uncommitted changes and it has not been touched in a while"
+    fi
+fi
+
+[ -n "$reason" ] || exit 0
+
+# Throttle per project directory so a stale file nags once, not every turn.
+key=$(printf '%s' "$PROJECT_DIR" | cksum | tr -cd '0-9' | cut -c1-16)
+marker="${STATE_DIR}/${key}"
+if [ -f "$marker" ]; then
+    last_nudge=$(file_mtime "$marker")
+    if [ $((now - last_nudge)) -lt "$THROTTLE_SECONDS" ]; then
+        exit 0
+    fi
+fi
+mkdir -p "$STATE_DIR" 2>/dev/null || true
+: > "$marker" 2>/dev/null || true
+
+printf '{\n'
+printf '  "hookSpecificOutput": {\n'
+printf '    "hookEventName": "Stop",\n'
+printf '    "additionalContext": "Project context check: .claude/context/state.md is behind the work - %s. Update state.md (and decisions.md if something was decided) with the superpowers:maintaining-project-context skill, so the next session resumes without rediscovering any of this. If nothing meaningful changed, say so and move on."\n' \
+    "$reason"
+printf '  }\n'
+printf '}\n'
+
+exit 0

@@ -114,6 +114,48 @@ Addımlar və qaydalar...
 Quraşdırıldıqdan sonra skill `superpowers:skill-adı` kimi çağırılır.
 Skill yazmaq qaydaları: `skills/writing-skills/SKILL.md`.
 
+## Layihə konteksti mexanizmi (fork-a xas)
+
+Bu fork-a əlavə edilən mexanizm sessiyalar, compaction-lar və maşınlar arasında
+layihənin kontekstini itirməməyə xidmət edir. Üzərində işlədiyin **hər bir layihədə**
+işləyir, bu repo-da yox.
+
+Layihə iştirak etmək üçün sadəcə `<layihə>/.claude/context/` qovluğuna sahib olmalıdır:
+
+| Fayl | Nə saxlayır |
+| --- | --- |
+| `project.md` | Stack, qurma/test əmrləri, konvensiyalar, mühit tələləri |
+| `state.md` | İş harada dayanıb, növbəti addım, açıq suallar |
+| `decisions.md` | Qərarlar, səbəbləri, rədd edilmiş alternativlər (yalnız əlavə olunur) |
+
+İstifadə:
+
+```
+/superpowers:context-init     # layihə üçün faylları yaradır və doldurur
+/superpowers:context-save     # cari vəziyyəti və qərarları indi yazır
+```
+
+Necə işləyir:
+
+- **Hər sessiyanın əvvəlində** `project.md` + `state.md` tam şəkildə konteksə yüklənir,
+  `decisions.md` isə yalnız xülasə olaraq (say + son 3 başlıq). `SessionStart` matcher-i
+  `compact`-i də tutduğu üçün **compaction-dan sonra da** yenidən yüklənir — söhbət
+  tarixçəsi silinən anda.
+- **Cavab bitəndə** (`Stop` hook) `state.md` işdən geri qalıbsa (yeni commit var, yaxud
+  ağac uzun müddət dirty-dir) xatırlatma inject olunur. Bloklamır, spam etmir —
+  layihə başına throttle var.
+- `.claude/context/` olmayan layihələrdə heç nə dəyişmir: nə inject, nə xatırlatma.
+
+Detallar və nizamlayıcı dəyişənlər: `docs/project-context.md`.
+Yazı qaydaları: `skills/maintaining-project-context/SKILL.md`.
+
+Testlər:
+
+```bash
+bash tests/hooks/test-project-context.sh
+bash tests/hooks/test-session-start.sh
+```
+
 ## Hansı qovluqlar əhəmiyyətlidir
 
 Claude Code üçün yalnız bunlar işləyir:
@@ -138,6 +180,11 @@ konfliktləri çıxacaq.
 - `.claude-plugin/plugin.json` — `homepage`/`repository` fork-a baxır, `version` yoxdur
 - `scripts/sync-upstream.ps1` — upstream sinxronizasiya skripti
 - `PERSONAL.md` — bu sənəd
+- `skills/maintaining-project-context/` — layihə konteksti skill-i və şablonlar
+- `hooks/project-context`, `hooks/context-nudge` — kontekst inject + köhnəlmə xatırlatması
+- `hooks/session-start`, `hooks/hooks.json` — kontekst blokunun və `Stop` hook-unun qoşulması
+- `commands/context-init.md`, `commands/context-save.md` — slash əmrləri
+- `docs/project-context.md`, `tests/hooks/test-project-context.sh` — sənəd və testlər
 
 Plugin adı bilərəkdən `superpowers` olaraq qalıb: skill namespace-i
 (`superpowers:brainstorming` və s.) və sənədlərdəki istinadlar ondan asılıdır.
