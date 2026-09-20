@@ -57,6 +57,22 @@ commit that removes an id already in history: a withdrawn decision keeps its
 number and changes its status. Reusing a number would make every earlier
 reference ambiguous, in documents nobody re-reads.
 
+## Adoption boundary
+
+The convention binds from the day a project adopts it, not retroactively.
+`doc-convention-since: YYYY-MM-DD` in `.claude/context/project.md` (or
+`SUPERPOWERS_DOC_SINCE`) sets that day:
+
+- Documents dated before it are left alone.
+- Documents dated on or after it must carry the front matter.
+- With no adoption date set, pre-existing documents are not reported one by
+  one - they collapse into a single line saying how many there are and how to
+  adopt.
+
+This was not theory. Running the linter on this repository produced 36 errors,
+all of them upstream's own plans written long before the rule existed. A tool
+that buries today's findings under a project's history does not get used.
+
 ## What the linter checks
 
 `hooks/doc-lint <project-dir>`:

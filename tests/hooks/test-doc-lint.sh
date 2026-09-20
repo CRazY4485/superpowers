@@ -81,6 +81,8 @@ assert_empty "a well-formed spec and plan lint clean" "$output"
 
 # --- missing status ------------------------------------------------------------
 nostatus="$(new_project nostatus)"
+printf 'doc-convention-since: 2026-01-01
+' > "$nostatus/.claude/context/project.md"
 cat > "$nostatus/docs/superpowers/plans/2026-03-13-import.md" <<'EOF'
 # Import plan
 
@@ -178,6 +180,41 @@ created: 2026-03-21
 EOF
 output="$(bash "$LINT" "$untethered" 2>&1 || true)"
 assert_contains "a plan with no derived-from is flagged" "$output" "derived-from"
+
+# --- documents that predate the convention -------------------------------------
+legacy="$(new_project legacy)"
+for d in 2026-01-05 2026-01-06 2026-01-07; do
+    printf '# Old plan
+
+No front matter, written before the convention existed.
+'         > "$legacy/docs/superpowers/plans/${d}-old.md"
+done
+output="$(bash "$LINT" "$legacy" 2>&1 || true)"
+if printf '%s' "$output" | grep -q '^ERROR'; then
+    fail "pre-existing documents are not reported as errors"
+    printf '%s
+' "$output" | sed 's/^/        /' | head -5
+else
+    pass "pre-existing documents are not reported as errors"
+fi
+assert_contains "they are summarised in one line instead" "$output" "3 document"
+assert_contains "the summary says how to adopt the convention" "$output" "doc-convention-since"
+
+# --- once adopted, later documents must comply ------------------------------------
+adopted="$(new_project adopted)"
+printf 'doc-convention-since: 2026-02-01
+' > "$adopted/.claude/context/project.md"
+printf '# Old plan
+' > "$adopted/docs/superpowers/plans/2026-01-20-old.md"
+printf '# New plan
+' > "$adopted/docs/superpowers/plans/2026-03-20-new.md"
+output="$(bash "$LINT" "$adopted" 2>&1 || true)"
+assert_contains "a document created after adoption must carry the front matter" "$output" "2026-03-20-new.md"
+if printf '%s' "$output" | grep -q '2026-01-20-old.md'; then
+    fail "a document created before adoption is left alone"
+else
+    pass "a document created before adoption is left alone"
+fi
 
 echo
 if [ "$FAILURES" -eq 0 ]; then
