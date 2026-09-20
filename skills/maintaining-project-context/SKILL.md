@@ -9,8 +9,14 @@ description: Use when starting work in a project, whenever a decision or milesto
 
 **Core principle: the next session starts cold. Write for it, not for yourself.**
 
-Every session loses everything that was not written down. Compaction loses it
-mid-session. Context files are the only thing that survives both.
+Every session loses everything that was not written down. `/clear` loses it
+instantly, a closed terminal loses it silently, compaction loses it mid-session,
+and another machine never had it. Context files are the only thing that survives
+all four.
+
+Nothing can write these files *for* you at the moment they are needed: `/clear`
+takes effect immediately, with no chance to save. So the files must already be
+correct before you hand control back - every time you hand control back.
 
 Context lives in `<project>/.claude/context/`:
 
@@ -32,6 +38,9 @@ IF IT WOULD COST THE NEXT SESSION TIME TO REDISCOVER IT, WRITE IT DOWN NOW
 
 Not at the end of the session. Now, while it is true.
 
+**Work as if the next message is `/clear`.** Before you hand the turn back
+after finishing anything, `state.md` must already describe the new position.
+
 ## When To Write
 
 | Trigger | File | What goes in |
@@ -41,6 +50,7 @@ Not at the end of the session. Now, while it is true.
 | Your human partner states a constraint, preference, or environment fact | `project.md` | The fact, phrased as a rule |
 | You lost time to a gotcha (flaky command, required env var, platform quirk) | `project.md` | The gotcha and the workaround |
 | Work stops, or context is about to compact | `state.md` | Exactly where to pick up |
+| You are about to hand the turn back after finishing a unit of work | `state.md` | The new position, before you answer |
 | Plan or spec written | `state.md` | Path to the plan, current step |
 | No context files exist yet | all three | Offer to create them from the templates in `templates/` |
 
@@ -66,8 +76,11 @@ Not at the end of the session. Now, while it is true.
 - Injected context is what an earlier session believed. Before acting on a
   claim that matters, confirm it against the repo (`git log`, tests, the file
   itself).
-- A `state.md` older than the last commits is suspect. Reconcile it before
-  trusting its "next step".
+- The injected block ends with a **reality check** - the commits and
+  uncommitted changes that landed *after* `state.md` was written. If it lists
+  anything, reconcile before you act: read those commits, fix `state.md`, and
+  only then follow its "Next". A stale "Next" sends you to redo finished work.
+- Say what you reconciled. Your human partner needs to know the file was wrong.
 
 ## Red Flags - STOP
 
@@ -79,6 +92,8 @@ Not at the end of the session. Now, while it is true.
 | "The code documents itself" | Code shows what, not why or what was rejected. |
 | "Nothing important happened" | A finished step and a discarded approach are both important. |
 | "I'll write it all up properly later" | Later is a session that no longer has the facts. |
+| "The session is still going" | `/clear` is one keystroke and gives no warning. |
+| "My partner will just resume this session" | They open a new one at least as often. Write for that one. |
 | "The file is out of date, I'll ignore it" | Fix it. A wrong file is worse than no file. |
 
 ## Setting A Project Up

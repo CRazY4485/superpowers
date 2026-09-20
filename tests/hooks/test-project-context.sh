@@ -65,6 +65,19 @@ git_commit_all() {
     git -C "$1" commit -q -m "$2"
 }
 
+# git_commit_all_at <dir> <message> <when>
+git_commit_all_at() {
+    local stamp
+    stamp=$(date -d "$3" '+%Y-%m-%dT%H:%M:%S' 2>/dev/null || printf '%s' "$3")
+    git -C "$1" add -A
+    GIT_AUTHOR_DATE="$stamp" GIT_COMMITTER_DATE="$stamp" git -C "$1" commit -q -m "$2"
+}
+
+# age_file <path> <when>
+age_file() {
+    touch -d "$2" "$1" 2>/dev/null || touch -t 200001010000 "$1"
+}
+
 echo "Project context collector"
 
 # --- no context directory -> silence ---------------------------------------
@@ -132,6 +145,48 @@ else
     fail "collector output stays under the size cap (was ${#output} chars)"
 fi
 
+# --- reality check: state.md versus what the repo actually did ---------------
+echo
+echo "Reality check against the repo"
+
+drift="$(make_project drift)"
+git_init "$drift"
+make_context "$drift"
+printf '# Current state\nNext: something already finished\n' > "$drift/.claude/context/state.md"
+age_file "$drift/.claude/context/state.md" "2 hours ago"
+echo "one" > "$drift/a.txt"
+git_commit_all "$drift" "FIRST_DRIFT_COMMIT"
+echo "two" > "$drift/b.txt"
+git_commit_all "$drift" "SECOND_DRIFT_COMMIT"
+output="$(CLAUDE_PROJECT_DIR="$drift" bash "$COLLECTOR")"
+assert_contains "reality check section present" "$output" "reality check"
+assert_contains "commit count since state.md reported" "$output" "2 commits since state.md was written"
+assert_contains "recent commit subject listed" "$output" "SECOND_DRIFT_COMMIT"
+assert_contains "asks for reconciliation" "$output" "Reconcile"
+
+insync="$(make_project insync)"
+git_init "$insync"
+make_context "$insync"
+echo "code" > "$insync/a.txt"
+git_commit_all "$insync" "initial"
+printf '# Current state\nfresh\n' > "$insync/.claude/context/state.md"
+output="$(CLAUDE_PROJECT_DIR="$insync" bash "$COLLECTOR")"
+assert_contains "in-sync repo reported as such" "$output" "no commits since state.md was written"
+
+dirtytree="$(make_project dirtytree)"
+git_init "$dirtytree"
+make_context "$dirtytree"
+echo "code" > "$dirtytree/a.txt"
+echo "code" > "$dirtytree/b.txt"
+git_commit_all "$dirtytree" "initial"
+printf '# Current state\nfresh\n' > "$dirtytree/.claude/context/state.md"
+echo "changed" >> "$dirtytree/a.txt"
+output="$(CLAUDE_PROJECT_DIR="$dirtytree" bash "$COLLECTOR")"
+assert_contains "uncommitted work reported" "$output" "1 tracked file with uncommitted changes"
+
+output="$(CLAUDE_PROJECT_DIR="$full" bash "$COLLECTOR")"
+assert_not_contains "no reality check outside a git repo" "$output" "reality check"
+
 # --- session-start injects the collected context ----------------------------
 echo
 echo "SessionStart integration"
@@ -198,6 +253,44 @@ fi
 
 output="$(run_nudge "$stale")"
 assert_empty "nudge is throttled on the immediately following turn" "$output"
+
+# Uncommitted edits made after state.md was written count as drift; edits made
+# before it do not, however old the working tree is.
+run_nudge_dirty() {
+    CLAUDE_PROJECT_DIR="$1" \
+    SUPERPOWERS_NUDGE_STATE_DIR="$2" \
+    SUPERPOWERS_NUDGE_DIRTY_SECONDS=0 \
+    bash "$NUDGE"
+}
+
+edited="$(make_project nudge-edited)"
+git_init "$edited"
+make_context "$edited"
+echo "code" > "$edited/a.txt"
+git_commit_all_at "$edited" "initial" "2 hours ago"
+printf '# Current state\nwritten, then the file changed\n' > "$edited/.claude/context/state.md"
+age_file "$edited/.claude/context/state.md" "1 hour ago"
+echo "more code" >> "$edited/a.txt"
+output="$(run_nudge_dirty "$edited" "$TEST_ROOT/nudge-state-edited")"
+if printf '%s' "$output" | node "$SCRIPT_DIR/assert-stop-nudge.cjs"; then
+    pass "edits made after state.md was written trigger a nudge"
+else
+    fail "edits made after state.md was written trigger a nudge"
+    printf '%s\n' "$output" | sed 's/^/      /'
+fi
+
+predated="$(make_project nudge-predated)"
+git_init "$predated"
+make_context "$predated"
+echo "code" > "$predated/a.txt"
+git_commit_all_at "$predated" "initial" "2 hours ago"
+echo "more code" >> "$predated/a.txt"
+age_file "$predated/a.txt" "90 minutes ago"
+printf '# Current state\nwritten after the edits, so it already covers them\n' \
+    > "$predated/.claude/context/state.md"
+age_file "$predated/.claude/context/state.md" "1 hour ago"
+output="$(run_nudge_dirty "$predated" "$TEST_ROOT/nudge-state-predated")"
+assert_empty "edits older than state.md do not trigger a nudge" "$output"
 
 echo
 if [ "$FAILURES" -eq 0 ]; then

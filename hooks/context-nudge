@@ -15,7 +15,7 @@ STATE_FILE="${PROJECT_DIR}/.claude/context/state.md"
 [ -f "$STATE_FILE" ] || exit 0
 
 THROTTLE_SECONDS="${SUPERPOWERS_NUDGE_THROTTLE_SECONDS:-1800}"
-DIRTY_SECONDS="${SUPERPOWERS_NUDGE_DIRTY_SECONDS:-5400}"
+DIRTY_SECONDS="${SUPERPOWERS_NUDGE_DIRTY_SECONDS:-2700}"
 STATE_DIR="${SUPERPOWERS_NUDGE_STATE_DIR:-${TMPDIR:-/tmp}/superpowers-context-nudge}"
 
 file_mtime() {
@@ -29,12 +29,30 @@ reason=""
 if git -C "$PROJECT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
     last_commit=$(git -C "$PROJECT_DIR" log -1 --format=%ct 2>/dev/null || echo 0)
     [ -n "$last_commit" ] || last_commit=0
-    dirty=$(git -C "$PROJECT_DIR" status --porcelain -uno 2>/dev/null | head -c 1)
+
+    # Newest mtime among tracked files with uncommitted changes. Edits made
+    # before state.md was written are already covered by it.
+    newest_change=0
+    changed=$(git -C "$PROJECT_DIR" status --porcelain -uno 2>/dev/null || true)
+    if [ -n "$changed" ]; then
+        while IFS= read -r line; do
+            [ -n "$line" ] || continue
+            path="${line:3}"
+            path="${path##* -> }"
+            path="${path%\"}"
+            path="${path#\"}"
+            [ -f "${PROJECT_DIR}/${path}" ] || continue
+            changed_mtime=$(file_mtime "${PROJECT_DIR}/${path}")
+            if [ "$changed_mtime" -gt "$newest_change" ]; then
+                newest_change="$changed_mtime"
+            fi
+        done < <(printf '%s\n' "$changed")
+    fi
 
     if [ "$last_commit" -gt "$state_mtime" ]; then
         reason="commits have landed since it was last written"
-    elif [ -n "$dirty" ] && [ $((now - state_mtime)) -gt "$DIRTY_SECONDS" ]; then
-        reason="the working tree has uncommitted changes and it has not been touched in a while"
+    elif [ "$newest_change" -gt "$state_mtime" ] && [ $((now - state_mtime)) -gt "$DIRTY_SECONDS" ]; then
+        reason="files have changed since it was last written"
     fi
 fi
 
@@ -55,7 +73,7 @@ mkdir -p "$STATE_DIR" 2>/dev/null || true
 printf '{\n'
 printf '  "hookSpecificOutput": {\n'
 printf '    "hookEventName": "Stop",\n'
-printf '    "additionalContext": "Project context check: .claude/context/state.md is behind the work - %s. Update state.md (and decisions.md if something was decided) with the superpowers:maintaining-project-context skill, so the next session resumes without rediscovering any of this. If nothing meaningful changed, say so and move on."\n' \
+printf '    "additionalContext": "Project context check: .claude/context/state.md is behind the work - %s. Update state.md (and decisions.md if something was decided) with the superpowers:maintaining-project-context skill. Assume the next thing that happens is a /clear: anything not in those files is gone. If nothing meaningful changed, say so and move on."\n' \
     "$reason"
 printf '  }\n'
 printf '}\n'

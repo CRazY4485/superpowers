@@ -6,6 +6,10 @@
 #   state.md     - where the work stands right now
 #   decisions.md - append-only decision log (summarised, never inlined)
 #
+# Also reports what the repository did after state.md was last written, so a
+# session that starts cold - a new session, /clear, or a compaction - can tell
+# a current file from a stale one.
+#
 # Prints a plain-text block on stdout, or nothing when the project has no
 # context directory. Never fails the session: exits 0 whatever it finds.
 
@@ -30,6 +34,10 @@ format_epoch() {
         || echo "unknown"
 }
 
+plural() {
+    if [ "$1" -eq 1 ]; then printf ''; else printf 's'; fi
+}
+
 # emit_file <path> <heading> <max-chars>
 emit_file() {
     local path="$1" heading="$2" max="$3"
@@ -49,28 +57,61 @@ emit_file() {
 }
 
 body=""
+newline=$'\n'
 profile_file="${CONTEXT_DIR}/project.md"
 state_file="${CONTEXT_DIR}/state.md"
 decisions_file="${CONTEXT_DIR}/decisions.md"
 
 if [ -f "$profile_file" ]; then
-    body+="$(emit_file "$profile_file" "project.md - project profile" "$MAX_PROFILE_CHARS")"$'\n'
+    body+="$(emit_file "$profile_file" "project.md - project profile" "$MAX_PROFILE_CHARS")${newline}"
 fi
 
 if [ -f "$state_file" ]; then
     state_heading="state.md - current state (updated $(format_epoch "$(file_mtime "$state_file")"))"
-    body+="$(emit_file "$state_file" "$state_heading" "$MAX_STATE_CHARS")"$'\n'
+    body+="$(emit_file "$state_file" "$state_heading" "$MAX_STATE_CHARS")${newline}"
+fi
+
+# What the repository did after state.md was last written. A session that
+# starts into a stale state.md needs to see this before trusting its "Next".
+if [ -f "$state_file" ] && git -C "$PROJECT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+    state_epoch=$(file_mtime "$state_file")
+    # --since is inclusive to the second, so filter strictly newer commits.
+    commit_data=$(git -C "$PROJECT_DIR" log --since="@${state_epoch}" --format='%ct%x09%h%x09%s' 2>/dev/null \
+        | awk -F'\t' -v cutoff="$state_epoch" '$1 > cutoff')
+    commit_lines=$(printf '%s' "$commit_data" | head -5 | awk -F'\t' 'NF { printf "- %s %s\n", $2, $3 }')
+    commit_count=$(printf '%s' "$commit_data" | grep -c . || true)
+    dirty_count=$(git -C "$PROJECT_DIR" status --porcelain -uno 2>/dev/null | wc -l | tr -d ' ')
+    [ -n "$commit_count" ] || commit_count=0
+    [ -n "$dirty_count" ] || dirty_count=0
+
+    body+="### reality check - state.md vs the repo${newline}"
+    if [ "$commit_count" -gt 0 ]; then
+        body+="${commit_count} commit$(plural "$commit_count") since state.md was written:${newline}"
+        body+="${commit_lines}${newline}"
+        if [ "$commit_count" -gt 5 ]; then
+            body+="(5 most recent shown)${newline}"
+        fi
+    else
+        body+="no commits since state.md was written.${newline}"
+    fi
+    if [ "$dirty_count" -gt 0 ]; then
+        body+="${dirty_count} tracked file$(plural "$dirty_count") with uncommitted changes.${newline}"
+    fi
+    if [ "$commit_count" -gt 0 ] || [ "$dirty_count" -gt 0 ]; then
+        body+="Reconcile state.md against this before trusting its Next section, and fix the file if it is wrong.${newline}"
+    fi
+    body+="${newline}"
 fi
 
 if [ -f "$decisions_file" ]; then
     entry_count=$(grep -c '^## ' "$decisions_file" 2>/dev/null || true)
     [ -n "$entry_count" ] || entry_count=0
     recent=$(grep '^## ' "$decisions_file" 2>/dev/null | tail -n "$DECISIONS_LISTED" | sed 's/^## /- /' || true)
-    body+="### decisions.md - ${entry_count} entries, most recent:"$'\n'
+    body+="### decisions.md - ${entry_count} entries, most recent:${newline}"
     if [ -n "$recent" ]; then
-        body+="${recent}"$'\n'
+        body+="${recent}${newline}"
     fi
-    body+="Read .claude/context/decisions.md before revisiting any settled decision."$'\n\n'
+    body+="Read .claude/context/decisions.md before revisiting any settled decision.${newline}${newline}"
 fi
 
 # Anything else the project keeps in there is worth knowing about by name.
@@ -79,7 +120,7 @@ others=$(find "$CONTEXT_DIR" -maxdepth 1 -type f -name '*.md' 2>/dev/null \
     | grep -vx -e 'project.md' -e 'state.md' -e 'decisions.md' \
     | sort | tr '\n' ' ' || true)
 if [ -n "${others// /}" ]; then
-    body+="### other context files: ${others}"$'\n\n'
+    body+="### other context files: ${others}${newline}${newline}"
 fi
 
 # Nothing readable in the directory - stay silent rather than inject an

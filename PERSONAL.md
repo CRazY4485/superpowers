@@ -138,9 +138,12 @@ Layihə iştirak etmək üçün sadəcə `<layihə>/.claude/context/` qovluğuna
 Necə işləyir:
 
 - **Hər sessiyanın əvvəlində** `project.md` + `state.md` tam şəkildə konteksə yüklənir,
-  `decisions.md` isə yalnız xülasə olaraq (say + son 3 başlıq). `SessionStart` matcher-i
-  `compact`-i də tutduğu üçün **compaction-dan sonra da** yenidən yüklənir — söhbət
-  tarixçəsi silinən anda.
+  `decisions.md` isə yalnız xülasə olaraq (say + son 3 başlıq). Matcher `startup|clear|compact`
+  olduğuna görə üç itki yolunun hamısı örtülür: **yeni sessiya** (yeni terminal, başqa gün,
+  başqa maşın), **`/clear`** və **compaction**.
+- **Reality check:** blokun sonunda `state.md` yazıldıqdan sonra repo-da nə baş verdiyi
+  göstərilir — neçə commit (son 5-in başlığı) və neçə fayl uncommitted. Yəni köhnəlmiş
+  `state.md`-ə kor-koranə etibar edilmir, əvvəlcə uzlaşdırılır.
 - **Cavab bitəndə** (`Stop` hook) `state.md` işdən geri qalıbsa (yeni commit var, yaxud
   ağac uzun müddət dirty-dir) xatırlatma inject olunur. Bloklamır, spam etmir —
   layihə başına throttle var.
