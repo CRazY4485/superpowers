@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# PreToolUse hook: when a plain fetch or search is about to answer a question,
+# point at the browser and at the vendor's own documentation instead.
+#
+# Never blocks - a quick fetch of a static page is sometimes the right call.
+# Speaks once per throttle window, not once per lookup.
+#
+# Prints a PreToolUse payload on stdout, or nothing. Always exits 0.
+
+set -uo pipefail
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+THROTTLE_SECONDS="${SUPERPOWERS_RESEARCH_THROTTLE:-3600}"
+STATE_DIR="${SUPERPOWERS_RESEARCH_STATE_DIR:-${TMPDIR:-/tmp}/superpowers-research}"
+
+payload=$(cat 2>/dev/null || true)
+[ -n "$payload" ] || exit 0
+command -v node >/dev/null 2>&1 || exit 0
+
+tool_name=$(printf '%s' "$payload" | node -e '
+let raw = "";
+process.stdin.on("data", (d) => { raw += d; });
+process.stdin.on("end", () => {
+  try {
+    process.stdout.write(JSON.parse(raw).tool_name || "");
+  } catch (error) {
+    process.stdout.write("");
+  }
+});' 2>/dev/null)
+
+case "$tool_name" in
+    WebFetch | WebSearch) ;;
+    *) exit 0 ;;
+esac
+
+file_mtime() {
+    stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0
+}
+
+key=$(printf '%s' "$PROJECT_DIR" | cksum | tr -cd '0-9' | cut -c1-16)
+marker="${STATE_DIR}/${key}"
+if [ -f "$marker" ]; then
+    if [ $(( $(date +%s) - $(file_mtime "$marker") )) -lt "$THROTTLE_SECONDS" ]; then
+        exit 0
+    fi
+fi
+mkdir -p "$STATE_DIR" 2>/dev/null || true
+: > "$marker" 2>/dev/null || true
+
+message="Research policy for this setup: browse with the Playwright MCP (browser_navigate, then a targeted browser_evaluate) rather than fetching or searching, and answer from the vendor's own documentation."
+message+=$'\n'"A real browser reaches pages that render their content with JavaScript, which a plain fetch returns empty. Go to the official domain first; treat blogs, forums and recollection as leads to verify, not as the answer."
+message+=$'\n'"Carry on with this call if the page is static and the fetch is genuinely cheaper - this is said once per hour, not once per lookup. See superpowers:researching-with-official-docs."
+
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+escaped=$(escape_for_json "$message")
+
+printf '{\n'
+printf '  "hookSpecificOutput": {\n'
+printf '    "hookEventName": "PreToolUse",\n'
+printf '    "additionalContext": "%s"\n' "$escaped"
+printf '  }\n'
+printf '}\n'
+
+exit 0

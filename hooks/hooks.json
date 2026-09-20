@@ -85,6 +85,17 @@
             "async": false
           }
         ]
+      },
+      {
+        "matcher": "WebFetch|WebSearch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd\" research-nudge",
+            "shell": "bash",
+            "async": false
+          }
+        ]
       }
     ]
   }

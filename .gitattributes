@@ -10,6 +10,7 @@ hooks/git-guard text eol=lf
 hooks/commit-nudge text eol=lf
 hooks/commit-gate text eol=lf
 hooks/branch-guard text eol=lf
+hooks/research-nudge text eol=lf
 
 # Ensure the polyglot wrapper keeps LF (it's parsed by both cmd and bash)
 *.cmd text eol=lf

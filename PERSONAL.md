@@ -280,6 +280,33 @@ claude plugin eval C:/obra2 --runs 1 --ablation none --trust-plugin --no-publish
 sonda qeyd edirdi; insan ona verilən **ilk** bloku işlədir. `recovering-work-with-git`
 indi qoruyan əmrin birinci gəlməsini tələb edir. Detallar: `docs/evals.md`.
 
+## Araşdırma mənbələri (fork-a xas)
+
+**Qayda:** xarici API, kitabxana, CLI və ya versiya davranışı sual altındadırsa,
+cavab **vendorun öz sənədindən** gəlir; yaddaşdan və bloqdan yox.
+
+`superpowers:researching-with-official-docs` skill-i bunu daşıyır:
+
+- **Playwright MCP ilə brauzerdən** getmək (`browser_navigate`, sonra hədəfli
+  `browser_evaluate`) — çünki müasir sənəd səhifələri JS ilə render olunur və adi
+  fetch boş qabıq qaytarır.
+- Tam accessibility snapshot-u oxumaq əvəzinə lazım olan bölməni çıxarmaq
+  (bir sənəd səhifəsinin snapshot-u yüz kilobaytlarladır).
+- Mənbə iyerarxiyası: rəsmi sənəd → layihənin repo-su (CHANGELOG, mənbə kod) →
+  rəsmi bloq → icma (Stack Overflow, bloqlar) — sonuncu **yalnız ipucudur**,
+  cavab deyil, istifadə olunursa bu açıq deyilməlidir.
+- Cavabda **URL sitat gətirmək**, dəqiqlik vacibdirsə sxemi **eynilə** vermək,
+  sonradan lazım olacaqsa `.claude/context/`-ə yazmaq.
+- `.playwright-mcp/` qovluğu `.gitignore`-da olmalıdır (MCP hər naviqasiyada ora
+  böyük snapshot yazır).
+
+**Hook:** `WebFetch`/`WebSearch` çağırılanda saatda bir dəfə brauzerə və rəsmi
+sənədə yönləndirən xatırlatma inject olunur. Bloklamır — statik səhifə üçün
+sadə fetch bəzən doğru seçimdir.
+
+**Eval:** `plugin-evals/official-docs` — "hansı hook-lar kontekst inject edə bilir,
+dəqiq JSON şəkli nədir?" sualına yaddaşdan qəti cavab verilməsi uğursuzluq sayılır.
+
 ## Hansı qovluqlar əhəmiyyətlidir
 
 Claude Code üçün yalnız bunlar işləyir:
@@ -309,13 +336,14 @@ konfliktləri çıxacaq.
 - `skills/recovering-work-with-git/` — commit tezliyi, undo seçimi, bərpa nərdivanı
 - `skills/investigating-with-git-history/` — bisect, `log -S`, blame ilə sübut toplamaq
 - `skills/resolving-merge-conflicts/` — konfliktləri niyyət səviyyəsində həll etmək
+- `skills/researching-with-official-docs/` — rəsmi sənəd + Playwright MCP ilə araşdırma
 - `hooks/project-context`, `hooks/context-nudge`, `hooks/interview-context` — inject və xatırlatma hook-ları
 - `hooks/git-checkpoint`, `hooks/checkpoint-turn`, `hooks/git-guard`, `hooks/commit-nudge` — checkpoint mühərriki, turluq snapshot, təhlükəli əmr qoruyucusu, commit xatırlatması
-- `hooks/commit-gate`, `hooks/branch-guard` — sirr/konflikt/böyük fayl qapısı, default branch xatırlatması
+- `hooks/commit-gate`, `hooks/branch-guard`, `hooks/research-nudge` — sirr/konflikt/böyük fayl qapısı, default branch və araşdırma mənbəyi xatırlatmaları
 - `plugin-evals/` — davranış eval-ları (4 case), `docs/evals.md`
 - `commands/` — `context-init`, `context-save`, `interview-status`, `interview-close`, `checkpoints`
 - `docs/project-context.md`, `docs/interview-ledger.md`, `docs/git-checkpoints.md` — sənədlər
-- `tests/hooks/test-project-context.sh`, `test-interview-ledger.sh`, `test-git-checkpoint.sh`, `test-commit-nudge.sh`, `test-commit-gate.sh` — testlər
+- `tests/hooks/test-project-context.sh`, `test-interview-ledger.sh`, `test-git-checkpoint.sh`, `test-commit-nudge.sh`, `test-commit-gate.sh`, `test-research-nudge.sh` — testlər
 
 **Upstream fayllarına toxunulan yerlər** (merge zamanı konflikt ehtimalı olan siyahı —
 yenilik gələndə əvvəlcə bunlara bax):
