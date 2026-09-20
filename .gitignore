@@ -18,3 +18,6 @@ __pycache__/
 *.pyo
 .pytest_cache/
 plugin-evals/results/
+
+# Playwright MCP writes page snapshots next to the working directory
+.playwright-mcp/
