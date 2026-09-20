@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# UserPromptSubmit hook: keeps an active interview's open and deferred items in
+# the newest position of the context, where they still carry weight.
+#
+# Reads <project>/.claude/context/interview.md. Answered entries stay in the
+# file - only the counts ride along - so a long interview does not re-pay for
+# its own history every turn.
+#
+# Prints a UserPromptSubmit payload on stdout, or nothing. Always exits 0.
+
+set -uo pipefail
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+LEDGER="${PROJECT_DIR}/.claude/context/interview.md"
+
+[ -f "$LEDGER" ] || exit 0
+
+MAX_ITEMS="${SUPERPOWERS_INTERVIEW_MAX_ITEMS:-12}"
+STATE_DIR="${SUPERPOWERS_INTERVIEW_STATE_DIR:-${TMPDIR:-/tmp}/superpowers-interview}"
+
+status=$(grep -m1 -i '^Status:' "$LEDGER" 2>/dev/null | sed 's/^[Ss]tatus:[[:space:]]*//' | tr -d '\r' | tr '[:upper:]' '[:lower:]')
+case "$status" in
+    closed|done|archived) exit 0 ;;
+esac
+
+file_mtime() {
+    stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0
+}
+
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+count_matching() {
+    local pattern="$1" n
+    n=$(grep -cE "$pattern" "$LEDGER" 2>/dev/null || true)
+    [ -n "$n" ] || n=0
+    printf '%s' "$n"
+}
+
+answered_count=$(count_matching '^## Q[0-9]+ \[answered\]')
+open_count=$(count_matching '^## Q[0-9]+ \[open\]')
+deferred_count=$(count_matching '^## Q[0-9]+ \[deferred')
+
+open_items=$(grep -E '^## Q[0-9]+ \[open\]' "$LEDGER" 2>/dev/null \
+    | sed -E 's/^## (Q[0-9]+) \[open\][[:space:]]*/- \1 /' || true)
+deferred_items=$(grep -E '^## Q[0-9]+ \[deferred' "$LEDGER" 2>/dev/null \
+    | sed -E 's/^## (Q[0-9]+) \[deferred:?[[:space:]]*([^]]*)\][[:space:]]*(.*)$/- \1 \3 (until: \2)/' || true)
+
+items=""
+[ -n "$open_items" ] && items="${open_items}"
+if [ -n "$deferred_items" ]; then
+    if [ -n "$items" ]; then
+        items="${items}"$'\n'"${deferred_items}"
+    else
+        items="${deferred_items}"
+    fi
+fi
+
+item_total=$((open_count + deferred_count))
+shown="$items"
+overflow=0
+if [ "$item_total" -gt "$MAX_ITEMS" ]; then
+    shown=$(printf '%s\n' "$items" | head -n "$MAX_ITEMS")
+    overflow=$((item_total - MAX_ITEMS))
+fi
+
+topic=$(grep -m1 '^# Interview:' "$LEDGER" 2>/dev/null | sed 's/^# Interview:[[:space:]]*//' | tr -d '\r')
+[ -n "$topic" ] || topic="untitled"
+
+# Did the previous prompt's answer go unrecorded?
+warning=""
+key=$(printf '%s' "$PROJECT_DIR" | cksum | tr -cd '0-9' | cut -c1-16)
+marker="${STATE_DIR}/${key}"
+if [ -f "$marker" ]; then
+    if [ "$(file_mtime "$LEDGER")" -le "$(file_mtime "$marker")" ]; then
+        warning="The ledger has not changed since the previous prompt. If that prompt answered anything, record it before you respond - that is how answers get lost."
+    fi
+fi
+mkdir -p "$STATE_DIR" 2>/dev/null || true
+: > "$marker" 2>/dev/null || true
+
+block="<INTERVIEW_LEDGER file=\".claude/context/interview.md\" topic=\"${topic}\">"$'\n'
+block+="${answered_count} answered, ${open_count} open, ${deferred_count} deferred."$'\n'
+if [ -n "$shown" ]; then
+    block+="Still owed:"$'\n'
+    block+="${shown}"$'\n'
+    if [ "$overflow" -gt 0 ]; then
+        block+="(${overflow} more in the file)"$'\n'
+    fi
+else
+    block+="Nothing open. Do not treat that as finished - close the interview deliberately."$'\n'
+fi
+block+="Answered entries stay in the file: re-read it before writing any spec, plan or summary, and do not rely on memory of what was said."$'\n'
+if [ -n "$warning" ]; then
+    block+="${warning}"$'\n'
+fi
+block+="Record every answer as it lands, verbatim, with superpowers:keeping-an-interview-ledger."$'\n'
+block+="</INTERVIEW_LEDGER>"
+
+escaped=$(escape_for_json "$block")
+
+printf '{\n'
+printf '  "hookSpecificOutput": {\n'
+printf '    "hookEventName": "UserPromptSubmit",\n'
+printf '    "additionalContext": "%s"\n' "$escaped"
+printf '  }\n'
+printf '}\n'
+
+exit 0

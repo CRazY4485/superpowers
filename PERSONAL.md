@@ -159,6 +159,37 @@ bash tests/hooks/test-project-context.sh
 bash tests/hooks/test-session-start.sh
 ```
 
+## Müsahibə reyestri (fork-a xas)
+
+Uzun sual-cavab prosesində cavabların itməsinə qarşı. Problem iki ayrı
+mexanizmdən ibarətdir və hər ikisi bağlanıb:
+
+- **Diqqət seyrəlməsi** — 20-ci sualda 3-cü cavab hələ kontekstdədir, amma çəkisi
+  itib. Həlli: açıq və ertələnmiş bəndlər `UserPromptSubmit` hook-u ilə **hər mesajda**
+  kontekstin ən yeni mövqeyinə yenidən yazılır.
+- **Ertələnmiş mövzular** — "sonra qərarlaşdırarıq" bir dəfə deyilir və yox olur.
+  Həlli: `[deferred: <tətik>]` statusu tətiksiz qəbul edilmir və bənd həll olunana
+  qədər hər mesajda görünür.
+
+Reyestr: `.claude/context/interview.md`. Statuslar: `[open]`, `[answered]`,
+`[deferred: <tətik>]`, `[superseded by Qnn]`. Cavablar **istifadəçinin öz sözləri ilə**
+sitat şəklində yazılır.
+
+```
+/superpowers:interview-status    # nə cavablanıb, nə açıqdır, nə ertələnib
+/superpowers:interview-close     # qapanış: qərarlar decisions.md-ə, ertələnənlər state.md-ə
+```
+
+Əlavə qaydalar skill-in içindədir: hər ~5 cavabdan sonra recap (insan düzəliş etsin),
+spec/plan/yekun yazmazdan əvvəl **coverage gate** (hər bənd ya əks olunub, ya açıq
+ertələnib, ya da səbəbi ilə köhnəlib).
+
+Cavab yazılmadığında: hook əvvəlki mesajdan bəri reyestrin dəyişmədiyini görürsə,
+"əvvəlki cavabı yaz" xəbərdarlığı inject edir. Hook modeli yazmağa məcbur edə bilmir —
+yalnız unutmağı görünən edir.
+
+Detallar: `docs/interview-ledger.md`.
+
 ## Hansı qovluqlar əhəmiyyətlidir
 
 Claude Code üçün yalnız bunlar işləyir:
@@ -184,10 +215,23 @@ konfliktləri çıxacaq.
 - `scripts/sync-upstream.ps1` — upstream sinxronizasiya skripti
 - `PERSONAL.md` — bu sənəd
 - `skills/maintaining-project-context/` — layihə konteksti skill-i və şablonlar
-- `hooks/project-context`, `hooks/context-nudge` — kontekst inject + köhnəlmə xatırlatması
-- `hooks/session-start`, `hooks/hooks.json` — kontekst blokunun və `Stop` hook-unun qoşulması
-- `commands/context-init.md`, `commands/context-save.md` — slash əmrləri
-- `docs/project-context.md`, `tests/hooks/test-project-context.sh` — sənəd və testlər
+- `skills/keeping-an-interview-ledger/` — müsahibə reyestri skill-i və şablon
+- `hooks/project-context`, `hooks/context-nudge`, `hooks/interview-context` — inject və xatırlatma hook-ları
+- `commands/` — `context-init`, `context-save`, `interview-status`, `interview-close`
+- `docs/project-context.md`, `docs/interview-ledger.md` — sənədlər
+- `tests/hooks/test-project-context.sh`, `tests/hooks/test-interview-ledger.sh` — testlər
+
+**Upstream fayllarına toxunulan yerlər** (merge zamanı konflikt ehtimalı olan siyahı —
+yenilik gələndə əvvəlcə bunlara bax):
+
+| Fayl | Nə əlavə edilib |
+| --- | --- |
+| `hooks/session-start` | Kontekst blokunun inject edilməsi |
+| `hooks/hooks.json` | `Stop` və `UserPromptSubmit` hook-larının qeydiyyatı |
+| `skills/brainstorming/SKILL.md` | "Record What They Tell You" bölməsi, 2 checklist bəndi, 2 red-flag sətri, coverage gate |
+| `skills/writing-plans/SKILL.md` | "Ledger Coverage" bölməsi |
+| `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` | Fork kimliyi, `version` sahəsinin silinməsi |
+| `.gitattributes` | Yeni hook faylları üçün LF qaydası |
 
 Plugin adı bilərəkdən `superpowers` olaraq qalıb: skill namespace-i
 (`superpowers:brainstorming` və s.) və sənədlərdəki istinadlar ondan asılıdır.

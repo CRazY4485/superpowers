@@ -35,6 +35,15 @@ When the request already supplies the purpose and constraints, reflect
 that understanding instead of asking the same questions again. Keep the
 note concise; its accuracy and the opportunity to correct it matter.
 
+## Record What They Tell You
+
+Answers decay. By question fifteen, answer three has stopped binding, and "we
+will decide that later" has vanished entirely. Any interview that runs past a
+few questions - and every answer that gets postponed - belongs in the ledger:
+`superpowers:keeping-an-interview-ledger`. Write each answer down in your
+partner's own words as it lands, before you respond to it, and run the ledger's
+coverage gate before you present a design, write a spec, or summarize.
+
 <HARD-GATE>
 Before taking any implementation action, including invoking an
 implementation skill, writing product code, scaffolding, installing
@@ -106,6 +115,8 @@ complete that path's reviews before implementation.
 | "The spike works, so I'll keep the code" | A spike's output is an answer. Keeping the code is a new request — classify it. |
 | "It grew, but I'm almost done — no need to re-classify" | Hidden complexity upgrades the path mid-task. Stop and say so. |
 | "They approved the spike, so the follow-up change is approved too" | Each task gets its own classification and its own approval. |
+| "I remember what they said earlier" | By question fifteen you remember your paraphrase. Read the ledger. |
+| "We'll come back to that later" | Only if it is in the ledger with a trigger. Otherwise it is already gone. |
 
 ## Checklist
 
@@ -121,7 +132,7 @@ your path and complete them in order.
 
 **Bounded:**
 1. **Explore project context** — check files, docs, recent commits
-2. **Ask clarifying questions** — one at a time, the ones that matter
+2. **Ask clarifying questions** — one at a time, the ones that matter; record each answer in the ledger once there are more than a handful
 3. **Present short design in chat** — approach, files touched, testing
 4. **Get approval** — STOP and wait for an explicit yes; presenting the design and starting in the same breath is skipping the gate
 5. **Implement** — proceed with the normal development workflow (TDD applies); no plan document
@@ -129,10 +140,10 @@ your path and complete them in order.
 **Architectural:**
 1. **Explore project context** — check files, docs, recent commits
 2. **Offer the visual companion just-in-time** — NOT upfront. The first time a question would genuinely be clearer shown than described, offer it then (its own message); on approval its browser tab opens for you. If no visual question ever arises, never offer it. See the Visual Companion section below.
-3. **Ask clarifying questions** — one at a time, understand purpose/constraints/success criteria
+3. **Ask clarifying questions** — one at a time, understand purpose/constraints/success criteria; every answer goes in the interview ledger as it lands
 4. **Propose 2-3 approaches** — with trade-offs and your recommendation
 5. **Present design** — in sections scaled to their complexity, get user approval after each section
-6. **Write design doc** — save to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and commit
+6. **Write design doc** — run the ledger coverage gate first, then save to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and commit
 7. **Spec self-review** — quick inline check for placeholders, contradictions, ambiguity, scope (see below)
 8. **User reviews written spec** — ask user to review the spec file before proceeding
 9. **Transition to implementation** — invoke writing-plans skill to create implementation plan

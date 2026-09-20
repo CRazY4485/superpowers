@@ -22,6 +22,14 @@ Assume they are a skilled developer, but know almost nothing about our toolset o
 
 If the spec covers multiple independent subsystems, it should have been broken into sub-project specs during brainstorming. If it wasn't, suggest breaking this into separate plans — one per subsystem. Each plan should produce working, testable software on its own.
 
+## Ledger Coverage
+
+If `.claude/context/interview.md` exists and is still active, read it before
+writing the plan and account for every entry: reflected in the plan, listed in
+it as deferred with its trigger, or obsolete with the reason. An open entry
+means the plan is premature - name the entries and ask. Do not decide them
+silently. See `superpowers:keeping-an-interview-ledger`.
+
 ## File Structure
 
 Before defining tasks, map out which files will be created or modified and what each one is responsible for. This is where decomposition decisions get locked in.
