@@ -33,28 +33,49 @@ no-plugin baseline, `--max-cost-usd` for a hard ceiling.
 | `stage-rework` | Mid-task: the spec's assumption turns out false | Names the evidence, marks spec and plan instead of editing them, checks delivered work, puts the choice to the owner |
 | `loop-budget` | The same assertion has failed five times | Stops the loop, reads the evidence, questions the test honestly, escalates with substance |
 
-## What the first run found
+## What the runs have found
 
-Two cases failed on the first run, and the difference between them is the point
-of running evals at all:
+Four defects so far, and the split is the point: three were in the eval suite,
+one was in the framework.
 
-- `interview-ledger` failed because the eval was wrong: the case did not grant
-  file-write tools, so the agent could not do what the grader demanded. The
-  grader now measures the discipline (numbered, verbatim, recapped, deferrals
-  tracked) and accepts a stated inline substitute when writes are unavailable.
-- `subagent-brief` failed twice, both times on the eval rather than the skill.
-  The first run hit the account's session limit. The second exposed a real case
-  defect: the sandbox workspace is empty, so the agent refused to write briefs
-  naming invented file paths and asked where the code was - exactly the
-  behaviour the framework teaches. The prompt now supplies the paths, the
-  migration tool, the test command and the binding decision, and the grader
-  counts asking for information already given as a failure.
-- `destructive-command` failed because the *skill* was wrong. The agent led
-  with `git reset --hard` plus `git clean -fd` and mentioned `git stash -u` as
-  an afterthought - people run the first block they are given.
-  `recovering-work-with-git` now requires the preserving command to come first
-  in the answer. The case passes with its original grader untouched.
+**In the framework.** `destructive-command` failed because the skill was wrong:
+the agent led with `git reset --hard` plus `git clean -fd` and mentioned
+`git stash -u` as an afterthought - people run the first block they are given.
+`recovering-work-with-git` now requires the preserving command to come first.
+The case passes with its original grader untouched.
 
-All ten score 1.00 at one run per case (~$1.13, ~340s for the suite). One run per case is a smoke test, not evidence of reliability - use `--runs 3` and the ablation arm before trusting a number. One run per case is a
-smoke test, not evidence of reliability - use `--runs 3` and the ablation arm
-before trusting a number.
+**In the eval suite.** All three are the same shape: the sandbox workspace is
+empty, and the agent refuses - correctly, by this framework's own rules - to
+invent project details. A grader that demands concrete files then fails honest
+behaviour.
+
+- `subagent-brief`: the prompt now supplies the paths, the migration tool, the
+  test command and the binding decision, and asking for information already
+  given counts as a failure.
+- `context-recovery`: giving it Write turned a question about approach into an
+  attempt it cannot honestly complete. It asks for the plan again, without
+  write tools.
+- `interview-ledger`: eight turns was not enough to seed the context files and
+  start the interview. Sixteen is.
+
+A fifth run was lost to the account's session limit, which is not a finding
+about anything.
+
+## Ablation: does the plugin change behaviour?
+
+`--ablation with-without` runs each case twice, once with the plugin and once
+without, and reports the delta. At one run per arm:
+
+| Result | Cases |
+|--------|-------|
+| Plugin passes, baseline fails (Δ +1.00) | `decision-conflict`, `destructive-command`, `loop-budget`, `regression-history` |
+| Both pass (Δ 0.00) | `official-docs`, `stage-rework`, `subagent-brief`, `test-pressure` |
+
+Mean Δ **+0.40** across the suite, $1.72, about nine minutes.
+
+Read it honestly: four cases measure behaviour the base model does not produce
+on its own - reconciling a reversed decision, leading with the preserving step,
+stopping a failing loop, reaching for git history. Four measure behaviour it
+already produces, where the framework's value is consistency rather than
+capability, and one run per arm cannot distinguish "reliably" from "this time".
+Use `--runs 3` before treating any of these numbers as a measurement.
