@@ -1,0 +1,259 @@
+#!/usr/bin/env bash
+# PreToolUse hook: everything that has to be checked before a commit lands,
+# in one process.
+#
+# Three checks share the same setup - parse the payload, confirm this is a
+# commit, list the staged files - so they run together rather than paying
+# Windows' process startup three times on every Bash call:
+#
+#   secrets    credentials and unresolved conflict markers (deny),
+#              credential-shaped literals and oversized files (warn)
+#   tests      newly skipped/focused tests and a net loss of tests (deny),
+#              assertions dropped while the tests stayed (warn)
+#   decisions  decision records with no reason, evidence that is an assumption,
+#              duplicate or dangling ids (deny), two live decisions on one
+#              scope (warn)
+#
+# `--only <secrets|tests|decisions>` runs a single check; the thin wrappers
+# hooks/commit-gate, hooks/test-integrity and hooks/decision-gate use it so
+# each check keeps its own entry point and its own test suite.
+#
+# Prints a PreToolUse payload on stdout, or nothing. Always exits 0.
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+MAX_FILE_BYTES="${SUPERPOWERS_COMMIT_MAX_FILE_BYTES:-5000000}"
+
+only="all"
+if [ "${1:-}" = "--only" ]; then
+    only="${2:-all}"
+fi
+
+payload=$(cat 2>/dev/null || true)
+[ -n "$payload" ] || exit 0
+# Cheap pre-filter before spawning a JSON parser: these checks only ever act on
+# a commit, and this runs on every Bash call. grep on the raw payload costs
+# about a millisecond; node startup costs two hundred.
+printf '%s' "$payload" | grep -q 'commit' || exit 0
+command -v node >/dev/null 2>&1 || exit 0
+
+sep=$'\x1f'
+parsed=$(printf '%s' "$payload" | node -e '
+let raw = "";
+process.stdin.on("data", (d) => { raw += d; });
+process.stdin.on("end", () => {
+  try {
+    const p = JSON.parse(raw);
+    const cmd = (p.tool_input && p.tool_input.command) || "";
+    process.stdout.write(`${p.tool_name || ""}\u001f${cmd}`);
+  } catch (error) {
+    process.stdout.write("");
+  }
+});' 2>/dev/null)
+
+[ -n "$parsed" ] || exit 0
+tool_name="${parsed%%${sep}*}"
+command_text="${parsed#*${sep}}"
+
+case "$tool_name" in
+    Bash | PowerShell) ;;
+    *) exit 0 ;;
+esac
+
+printf '%s' "$command_text" | grep -qE 'git([[:space:]]+-[^[:space:]]+)*[[:space:]]+commit([[:space:]]|$)' || exit 0
+git -C "$PROJECT_DIR" rev-parse --git-dir >/dev/null 2>&1 || exit 0
+
+staged=$(git -C "$PROJECT_DIR" diff --cached --name-only 2>/dev/null || true)
+[ -n "$staged" ] || exit 0
+
+blockers=""
+warnings=""
+guidance=""
+
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+count_matches() {
+    local text="$1" pattern="$2" n
+    n=$(printf '%s\n' "$text" | grep -cE "$pattern" || true)
+    [ -n "$n" ] || n=0
+    printf '%s' "$n"
+}
+
+# --- secrets and conflict markers ---------------------------------------------
+# Findings are reported by name and location - never by value. Echoing a secret
+# back into the transcript is another copy of the secret. Lines carrying the
+# detect-secrets style pragma are the author's statement that a match is a
+# fixture; a secret scanner's own tests are made of fake secrets.
+check_secrets() {
+    local found=0 file blob size lines
+
+    while IFS= read -r file; do
+        [ -n "$file" ] || continue
+
+        # Size first: a binary blob has no added text lines to scan.
+        blob=$(git -C "$PROJECT_DIR" rev-parse ":${file}" 2>/dev/null || true)
+        if [ -n "$blob" ]; then
+            size=$(git -C "$PROJECT_DIR" cat-file -s "$blob" 2>/dev/null || echo 0)
+            if [ "${size:-0}" -gt "$MAX_FILE_BYTES" ]; then
+                warnings+="- ${file}: ${size} bytes staged, over the ${MAX_FILE_BYTES} byte limit"$'\n'
+            fi
+        fi
+
+        lines=$(git -C "$PROJECT_DIR" diff --cached -- "$file" 2>/dev/null \
+            | grep '^+' | grep -v '^+++' | grep -v 'pragma: allowlist secret')
+        [ -n "$lines" ] || continue
+
+        if printf '%s\n' "$lines" | grep -qE '^\+(<<<<<<< |>>>>>>> )'; then
+            blockers+="- ${file}: unresolved conflict marker"$'\n'; found=1
+        fi
+        if printf '%s\n' "$lines" | grep -qE 'AKIA[0-9A-Z]{16}'; then
+            blockers+="- ${file}: AWS access key id"$'\n'; found=1
+        fi
+        if printf '%s\n' "$lines" | grep -qE 'BEGIN [A-Z ]*PRIVATE KEY'; then
+            blockers+="- ${file}: private key block"$'\n'; found=1
+        fi
+        if printf '%s\n' "$lines" | grep -qE 'gh[pousr]_[A-Za-z0-9]{30,}'; then
+            blockers+="- ${file}: GitHub token"$'\n'; found=1
+        fi
+        if printf '%s\n' "$lines" | grep -qE 'xox[baprs]-[A-Za-z0-9-]{10,}'; then
+            blockers+="- ${file}: Slack token"$'\n'; found=1
+        fi
+        if printf '%s\n' "$lines" | grep -qE '(^|[^A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}'; then
+            blockers+="- ${file}: API secret key"$'\n'; found=1
+        fi
+        if printf '%s\n' "$lines" | grep -qiE '(password|passwd|secret|api_?key|access_?token|auth_?token)[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"']{6,}["'"'"']'; then
+            warnings+="- ${file}: a credential-shaped literal is assigned inline"$'\n'
+        fi
+    done < <(printf '%s\n' "$staged")
+
+    if [ "$found" = "1" ]; then
+        guidance+="Fix the staged content, not the check: remove the credential from the file and rotate it if it was ever real, or finish resolving the conflict. If it is a placeholder or fixture, say so to your human partner and use a value that cannot be mistaken for a live secret - or mark the line 'pragma: allowlist secret'."$'\n'
+    fi
+}
+
+# --- test suite integrity -------------------------------------------------------
+# Counting nets rather than absolutes is what lets a rename or a refactor pass
+# untouched: one test out, one test in, no loss.
+check_tests() {
+    local found=0 file lines added removed
+    local skips_added skips_removed defs_added defs_removed asserts_added asserts_removed lost
+
+    local skip_pattern='(@pytest\.mark\.(skip|xfail)|@unittest\.skip|@Disabled|@Ignore|#\[ignore\]|\b(it|test|describe|context)\.(skip|only)\(|\bx(it|describe|test)\(|\bfit\(|\bfdescribe\(|t\.Skip\(|\.Skip\(\)|testing\.Short\(\))'
+    local test_def_pattern='(\bdef test_|\bfunc Test[A-Z]|\b(it|test|describe)\(|\[Test\]|\bpublic void test)'
+    local assertion_pattern='(\bassert\b|\bexpect\(|\bshould\b|assertEquals|assertTrue|assertFalse|XCTAssert|require\.(True|NoError|Equal)|\bt\.(Error|Fatal)f?\()'
+
+    while IFS= read -r file; do
+        [ -n "$file" ] || continue
+        printf '%s' "$file" | grep -qE '(^|/)(tests?|spec|__tests__)/|(^|/)conftest\.py$|_test\.[a-z]+$|\.test\.[a-z]+$|_spec\.[a-z]+$|\.spec\.[a-z]+$|(^|/)test_[^/]+$' || continue
+
+        lines=$(git -C "$PROJECT_DIR" diff --cached -- "$file" 2>/dev/null | grep -v 'pragma: test-change')
+        [ -n "$lines" ] || continue
+
+        added=$(printf '%s\n' "$lines" | grep '^+' | grep -v '^+++' || true)
+        removed=$(printf '%s\n' "$lines" | grep '^-' | grep -v '^---' || true)
+
+        skips_added=$(count_matches "$added" "$skip_pattern")
+        skips_removed=$(count_matches "$removed" "$skip_pattern")
+        if [ "$skips_added" -gt "$skips_removed" ]; then
+            blockers+="- ${file}: a test was skipped, focused, or marked expected-to-fail"$'\n'; found=1
+        fi
+
+        defs_added=$(count_matches "$added" "$test_def_pattern")
+        defs_removed=$(count_matches "$removed" "$test_def_pattern")
+        if [ "$defs_removed" -gt "$defs_added" ]; then
+            lost=$((defs_removed - defs_added))
+            blockers+="- ${file}: ${lost} more test(s) removed than added"$'\n'; found=1
+        fi
+
+        asserts_added=$(count_matches "$added" "$assertion_pattern")
+        asserts_removed=$(count_matches "$removed" "$assertion_pattern")
+        if [ "$asserts_removed" -gt "$asserts_added" ] && [ "$defs_removed" -le "$defs_added" ]; then
+            lost=$((asserts_removed - asserts_added))
+            warnings+="- ${file}: ${lost} assertion(s) removed while the tests stayed"$'\n'
+        fi
+    done < <(printf '%s\n' "$staged")
+
+    if [ "$found" = "1" ]; then
+        guidance+="A test that stands in the way of a change is evidence about the change, not an obstacle to remove. Make the code satisfy the test, or - if the behaviour genuinely retired - say so to your human partner, get their agreement, and mark the line 'pragma: test-change <reason>' so the record shows a decision rather than a quiet deletion."$'\n'
+    fi
+}
+
+# --- decision records -------------------------------------------------------------
+check_decisions() {
+    local decision_files workdir file staged_copy out findings errors warns
+    decision_files=$(printf '%s\n' "$staged" | grep -E '(^|/)(\.claude/context/decisions\.md$|memory-bank/decisions/.*\.md$|docs/decisions/.*\.md$)' || true)
+    [ -n "$decision_files" ] || return 0
+
+    workdir=$(mktemp -d 2>/dev/null) || return 0
+    findings=""
+    while IFS= read -r file; do
+        [ -n "$file" ] || continue
+        staged_copy="${workdir}/$(printf '%s' "$file" | tr '/' '_')"
+        git -C "$PROJECT_DIR" show ":${file}" > "$staged_copy" 2>/dev/null || continue
+        # Report against the real path, not the temp copy.
+        out=$(bash "${SCRIPT_DIR}/decision-lint" "$staged_copy" 2>/dev/null | sed "s#${staged_copy}#${file}#g")
+        [ -n "$out" ] && findings+="${out}"$'\n'
+    done < <(printf '%s\n' "$decision_files")
+    rm -rf "$workdir"
+
+    [ -n "${findings//[[:space:]]/}" ] || return 0
+
+    errors=$(printf '%s\n' "$findings" | grep '^ERROR ' || true)
+    warns=$(printf '%s\n' "$findings" | grep '^WARN ' || true)
+
+    if [ -n "$errors" ]; then
+        blockers+="${errors}"$'\n'
+        guidance+="A decision without a stated reason, or resting on an assumption, is not a record - it is a guess that later reads as settled. State why, name the source the reason rests on (the owner's own words, a measurement, a document section, an official page), and mark supersession on both entries. If the reason is genuinely not known yet, ask your human partner rather than writing a plausible one."$'\n'
+    fi
+    if [ -n "$warns" ]; then
+        warnings+="${warns}"$'\n'
+        warnings+="Two live decisions on one scope means one of them is wrong, or the scopes are narrower than they look. Put both to your human partner in plain language and record the outcome as a supersession - see superpowers:reconciling-decisions."$'\n'
+    fi
+}
+
+case "$only" in
+    secrets) check_secrets ;;
+    tests) check_tests ;;
+    decisions) check_decisions ;;
+    *) check_secrets; check_tests; check_decisions ;;
+esac
+
+if [ -n "$blockers" ]; then
+    reason="This commit is blocked by what it would put into history:"$'\n'
+    reason+="${blockers}"
+    reason+="${guidance}"
+    escaped=$(escape_for_json "$reason")
+    printf '{\n'
+    printf '  "hookSpecificOutput": {\n'
+    printf '    "hookEventName": "PreToolUse",\n'
+    printf '    "permissionDecision": "deny",\n'
+    printf '    "permissionDecisionReason": "%s"\n' "$escaped"
+    printf '  }\n'
+    printf '}\n'
+    exit 0
+fi
+
+if [ -n "$warnings" ]; then
+    message="Worth a look before this commit lands:"$'\n'
+    message+="${warnings}"
+    message+="None of these is fatal. Confirm each is what you intend."
+    escaped=$(escape_for_json "$message")
+    printf '{\n'
+    printf '  "hookSpecificOutput": {\n'
+    printf '    "hookEventName": "PreToolUse",\n'
+    printf '    "additionalContext": "%s"\n' "$escaped"
+    printf '  }\n'
+    printf '}\n'
+fi
+
+exit 0

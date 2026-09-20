@@ -125,6 +125,28 @@ git checkout <sha> -- .                # everything, overwrites current edits
 - The refs keep their objects alive, so `git gc` cannot reclaim them until
   pruning drops the ref.
 
+## Runtime cost
+
+Every `Bash` tool call pays for the hooks registered on it, and on Windows a
+bash process costs roughly 170 ms to start. Four separate hooks on that matcher
+measured **~1300 ms per call**, which is a tax on work that has nothing to do
+with git.
+
+Two changes brought it to **~420 ms**:
+
+- Each hook pre-filters the raw payload with `grep` before spawning a JSON
+  parser: no `commit` in the text, no node. A grep costs about a millisecond;
+  node startup costs two hundred.
+- The three commit-time checks - secrets, test integrity, decision records -
+  now run in one process, `hooks/commit-gates`, which parses the payload and
+  lists the staged files once. `hooks/commit-gate`, `hooks/test-integrity` and
+  `hooks/decision-gate` remain as thin wrappers (`--only <check>`) so each check
+  keeps its own entry point and its own test suite.
+
+What is left is two processes per Bash call: the destructive-command guard and
+the commit gates. Merging those two would halve it again, at the cost of one
+file that does two unrelated jobs.
+
 ## Tests
 
 ```bash

@@ -431,6 +431,7 @@ konfliktləri çıxacaq.
 - `hooks/commit-gate`, `hooks/branch-guard`, `hooks/research-nudge` — sirr/konflikt/böyük fayl qapısı, default branch və araşdırma mənbəyi xatırlatmaları
 - `hooks/test-integrity` — testin zəiflədilməsi qapısı
 - `hooks/decision-lint`, `hooks/decision-gate` — qərar qeydlərinin linteri və commit qapısı
+- `hooks/commit-gates` — üç commit yoxlaması bir prosesdə (sirr, test bütövlüyü, qərar qeydləri); `commit-gate`/`test-integrity`/`decision-gate` nazik sarğılardır
 - `hooks/brief-check` — sub-agent brifinqinin tamlıq yoxlaması
 - `plugin-evals/` — davranış eval-ları (4 case), `docs/evals.md`
 - `commands/` — `context-init`, `context-save`, `interview-status`, `interview-close`, `checkpoints`, `decision-audit`, `constitution-init`
