@@ -53,9 +53,11 @@ mkdir -p "$STATE_DIR" 2>/dev/null || true
 hours=$((age / 3600))
 minutes=$(((age % 3600) / 60))
 if [ "$hours" -gt 0 ]; then
-    age_text="${hours}h ${minutes}m"
+    age_clause="${hours}h ${minutes}m has passed since the last commit"
+elif [ "$minutes" -gt 0 ]; then
+    age_clause="${minutes}m has passed since the last commit"
 else
-    age_text="${minutes}m"
+    age_clause="the last commit was under a minute ago"
 fi
 
 if [ "$changed" -eq 1 ]; then
@@ -67,8 +69,8 @@ fi
 printf '{\n'
 printf '  "hookSpecificOutput": {\n'
 printf '    "hookEventName": "Stop",\n'
-printf '    "additionalContext": "Commit check: %s, and %s has passed since the last commit. Commit whatever currently passes its tests, in logical pieces with messages that say why - the automatic checkpoints are local and pruned, so they are a floor under accidents, not a record. See superpowers:recovering-work-with-git. If the work genuinely is not committable yet, say what is blocking it."\n' \
-    "$subject" "$age_text"
+printf '    "additionalContext": "Commit check: %s, and %s. Commit whatever currently passes its tests, in logical pieces with messages that say why - the automatic checkpoints are local and pruned, so they are a floor under accidents, not a record. See superpowers:recovering-work-with-git. If the work genuinely is not committable yet, say what is blocking it."\n' \
+    "$subject" "$age_clause"
 printf '  }\n'
 printf '}\n'
 
