@@ -43,6 +43,33 @@ claude plugin install superpowers@superpowers-personal
 Sonra Claude Code-u **restart et** — skill-lər sessiya başlayanda `SessionStart`
 hook-u ilə yüklənir.
 
+### Scope: user, project, yoxsa local?
+
+Yuxarıdakı əmrlər **user scope**-a quraşdırır (defolt, sual verilmir) — yəni bu
+maşındakı **bütün layihələrdə** aktiv olur. `--scope` ilə bunu dəyişmək olar:
+
+| Scope | Yazılan fayl | Kimə aiddir | Nə vaxt |
+| --- | --- | --- | --- |
+| `user` (defolt) | `~/.claude/settings.json` | Bu maşındakı hər layihə | Şəxsi framework kimi — **adi hal** |
+| `project` | `<layihə>/.claude/settings.json` | Həmin qovluqda işləyən hər kəs | Framework layihə ilə birlikdə səyahət etsin |
+| `local` | `<layihə>/.claude/settings.local.json` | Yalnız sən, yalnız bu layihədə | Sınaqdan keçirmək, paylaşmadan |
+
+```bash
+claude plugin marketplace add CRazY4485/superpowers --scope project
+claude plugin install superpowers@superpowers-personal --scope project
+```
+
+Bu, layihənin `.claude/settings.json`-una iki açar yazır — `extraKnownMarketplaces`
+(marketplace-in ünvanı) və `enabledPlugins`. Rəsmi sənədə görə `.claude/settings.json`
+**commit edilmək üçün nəzərdə tutulub**: repo-nu başqa maşında klonlayanda plugin
+elanı da onunla gəlir, yəni əmrləri yenidən yazmaq lazım gəlmir.
+
+İkisi eyni anda ola bilər (user + project) — plugin bir dəfə yüklənir, `plugin list`
+sadəcə hər iki elanı göstərir.
+
+**Tövsiyə:** şəxsi framework olduğu üçün **user scope əsas qalsın**; `project` scope-u
+isə framework-ün repo ilə birlikdə getməsini istədiyin konkret layihələrdə əlavə et.
+
 ### Ön şərtlər (yeni cihazda mütləq yoxla)
 
 Yuxarıdakı iki əmr plugin-i quraşdırmaq üçün kifayətdir, amma **mexanizmlərin
