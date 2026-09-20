@@ -72,6 +72,14 @@ output="$(fail_run "pytest -q tests/import")"
 assert_says "the hard limit says to stop and report" "$output" "Stop"
 assert_says "the hard limit names who must hear about it" "$output" "human partner"
 
+if printf '%s' "$output" | node "$SCRIPT_DIR/assert-posttooluse.cjs" --event PostToolUseFailure "Stop"; then
+    pass "a failing tool call answers on its own event name"
+else
+    fail "a failing tool call answers on its own event name"
+    printf '%s
+' "$output" | sed 's/^/        /' | head -4
+fi
+
 output="$(pass_run "pytest -q tests/import")"
 assert_empty "a passing run says nothing" "$output"
 output="$(fail_run "pytest -q tests/import")"

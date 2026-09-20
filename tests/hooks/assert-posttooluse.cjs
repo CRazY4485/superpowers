@@ -13,9 +13,16 @@ try {
   fail(`invalid JSON: ${error.message}`);
 }
 
+const args = process.argv.slice(2);
+let expectedEvent = "PostToolUse";
+if (args[0] === "--event") {
+  expectedEvent = args[1];
+  args.splice(0, 2);
+}
+
 const hookOutput = payload.hookSpecificOutput;
-if (!hookOutput || hookOutput.hookEventName !== "PostToolUse") {
-  fail("payload is not a PostToolUse hook result");
+if (!hookOutput || hookOutput.hookEventName !== expectedEvent) {
+  fail(`expected hookEventName ${expectedEvent}, got ${hookOutput && hookOutput.hookEventName}`);
 }
 
 const context = hookOutput.additionalContext;
@@ -23,7 +30,7 @@ if (typeof context !== "string" || context.trim() === "") {
   fail("hook produced no additionalContext");
 }
 
-for (const needle of process.argv.slice(2)) {
+for (const needle of args) {
   if (!context.includes(needle)) {
     fail(`context did not contain: ${needle}`);
   }

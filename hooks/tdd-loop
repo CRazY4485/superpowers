@@ -117,9 +117,17 @@ fi
 
 escaped=$(escape_for_json "$message")
 
+# Answer on the event we were called for. A PostToolUseFailure payload that
+# claims to be PostToolUse is discarded by the harness - which is exactly how
+# this went unnoticed until a real session ran it.
+case "$event" in
+    PostToolUseFailure) out_event="PostToolUseFailure" ;;
+    *) out_event="PostToolUse" ;;
+esac
+
 printf '{\n'
 printf '  "hookSpecificOutput": {\n'
-printf '    "hookEventName": "PostToolUse",\n'
+printf '    "hookEventName": "%s",\n' "$out_event"
 printf '    "additionalContext": "%s"\n' "$escaped"
 printf '  }\n'
 printf '}\n'
