@@ -7,10 +7,24 @@ Upstream yenilikləri buraya çəkilir, şəxsi dəyişikliklər birbaşa `main`
 Bu sənəd **indeksdir**: nə etməli olduğunu və detalın harada olduğunu göstərir.
 Hər mexanizmin izahı `docs/` altında **bir dəfə** yazılıb — burada təkrarlanmır.
 
+## Bu fork nədir və nə deyil
+
+Repo **xüsusi təkmilləşdirmə və şəxsi istifadə üçün** fork edilib. İşlədilən
+yeganə framework budur: **orijinal `obra/superpowers` heç bir zaman quraşdırılmır
+və istifadə edilmir** — nə rəsmi marketplace-dən, nə `obra/superpowers-marketplace`-dən.
+Bütün maşınlarda plugin yalnız `CRazY4485/superpowers`-dən quraşdırılır.
+
+`upstream` remote-unun **tək bir məqsədi** var: orijinalın düzəlişlərini və
+təkmilləşdirmələrini **bu fork-un içinə çəkmək**. Orijinaldan istifadə etmək demək
+deyil. Əgər bir gün upstream yeniliklərini də çəkməmək qərarına gəlinsə, onda
+`upstream` remote-u, `scripts/sync-upstream.ps1` və `scripts/upstream-register.sh`
+**silinməlidir** — işlənməyən mexanizmi "hər ehtimala qarşı" saxlamaq bu fork-un
+öz qaydalarına ziddir.
+
 | Remote | Repo | Məqsəd |
 | --- | --- | --- |
-| `origin` | `CRazY4485/superpowers` | Şəxsi fork — plugin buradan quraşdırılır |
-| `upstream` | `obra/superpowers` | Orijinal layihə — yalnız oxumaq/çəkmək üçün |
+| `origin` | `CRazY4485/superpowers` | **İşlədilən framework** — plugin yalnız buradan quraşdırılır |
+| `upstream` | `obra/superpowers` | Yalnız yenilik mənbəyi — fork-a çəkmək üçün, istifadə üçün yox |
 
 Lokal iş qovluğu: `C:\obra2`
 

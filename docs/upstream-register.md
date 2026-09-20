@@ -1,8 +1,15 @@
 # Upstream register
 
-This fork tracks `obra/superpowers`. Most of what it adds are new files, which
-never conflict. The cost of the fork is the handful of **upstream files it
-modifies**: every upstream release can collide there.
+This fork tracks `obra/superpowers` for one purpose: **pulling its fixes into the
+fork**. The original is never installed or used as the framework - the only thing
+installed anywhere is this fork.
+
+Most of what the fork adds are new files, which never conflict. The cost is the
+handful of **upstream files it modifies**: every upstream release can collide
+there. That cost is the entire reason this register exists - and if the decision
+is ever made to stop merging upstream at all, the register, the sync script and
+the `upstream` remote should be deleted rather than kept for a merge that will
+not come.
 
 ## The register is derived, not stored
 
