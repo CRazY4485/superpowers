@@ -208,11 +208,29 @@ Nə vaxt götürülür:
 | Hər cavabın sonunda | `Stop` (async) | `turn` |
 | İşi silə bilən Bash əmrindən **əvvəl** | `PreToolUse` (matcher `Bash`) | `pre-destructive` |
 
-Qoruyucu bu əmrləri tanıyır: `reset --hard/--merge/--keep`, `checkout -- `,
-`restore`, `clean -f*`, `stash drop|clear|pop`, `branch -D`, `rebase`,
-`commit --amend`, `push --force`. **Bloklamır** — əvvəlcə checkpoint götürür və
-sha ilə bərpa əmrlərini kontekstə yazır. Qəsdən yazılmış əmri bloklamaq maneədir;
-commit edilməmiş işi itirmək isə ziyandır — mexanizm ikincini birinciyə çevirir.
+Qoruyucu iki sinif əmri tanıyır (`Bash` və `PowerShell` alətlərində):
+
+- **git:** `reset --hard/--merge/--keep`, `checkout -- `, `restore`, `clean -f*`,
+  `stash drop|clear|pop`, `branch -D`, `rebase`, `commit --amend`, `push --force`.
+  İtiriləcək bir şey yoxdursa, bunu da deyir (əməliyyatın təhlükəsiz olduğunu bilmək dəyərlidir).
+- **kütləvi silmə:** `rm -r*/-f*`, `shred`, `truncate -s`, `find … -delete`,
+  `find … -exec rm`, `Remove-Item … -Recurse/-Force`, `Clear-Content`, `rmdir /s`, `del /s|/q`.
+  Bunlar tez-tez işlənir, ona görə itki riski yoxdursa səssiz qalır.
+  Tək fayllıq `rm notes.txt` qəsdən və dardır — toxunulmur.
+
+**Bloklamır** — əvvəlcə checkpoint götürür və sha ilə bərpa əmrlərini kontekstə yazır.
+Qəsdən yazılmış əmri bloklamaq maneədir; commit edilməmiş işi itirmək isə ziyandır —
+mexanizm ikincini birinciyə çevirir.
+
+**Commit xatırlatması** (`Stop`): ağac son commit-dən uzaqlaşıbsa — ən azı 5 fayl
+dəyişib, yaxud son commit-dən 45 dəqiqədən çox keçib və ağac dirty-dir — görünən
+xəbərdarlıq gəlir. Untracked fayllar sayılır, ignored fayllar yox; layihə başına throttle.
+Səbəb: **checkpoint qeyd deyil** — lokaldır, budanır, partnyorun görmür.
+
+**Tarixçə ilə istintaq:** `superpowers:investigating-with-git-history` —
+`git bisect run` ilə ilk sınıq commit-i tapmaq, `log -S` ilə sətrin haradan gəldiyini
+görmək, `blame` → sha → commit mesajı ilə "niyə belədir" sualını cavablandırmaq.
+`systematic-debugging`-in 1-ci fazasından ona keçid qoyulub.
 
 ```
 /superpowers:checkpoints          # siyahı + bərpa axını
@@ -253,11 +271,12 @@ konfliktləri çıxacaq.
 - `skills/maintaining-project-context/` — layihə konteksti skill-i və şablonlar
 - `skills/keeping-an-interview-ledger/` — müsahibə reyestri skill-i və şablon
 - `skills/recovering-work-with-git/` — commit tezliyi, undo seçimi, bərpa nərdivanı
+- `skills/investigating-with-git-history/` — bisect, `log -S`, blame ilə sübut toplamaq
 - `hooks/project-context`, `hooks/context-nudge`, `hooks/interview-context` — inject və xatırlatma hook-ları
-- `hooks/git-checkpoint`, `hooks/checkpoint-turn`, `hooks/git-guard` — checkpoint mühərriki, turluq snapshot, təhlükəli əmr qoruyucusu
+- `hooks/git-checkpoint`, `hooks/checkpoint-turn`, `hooks/git-guard`, `hooks/commit-nudge` — checkpoint mühərriki, turluq snapshot, təhlükəli əmr qoruyucusu, commit xatırlatması
 - `commands/` — `context-init`, `context-save`, `interview-status`, `interview-close`, `checkpoints`
 - `docs/project-context.md`, `docs/interview-ledger.md`, `docs/git-checkpoints.md` — sənədlər
-- `tests/hooks/test-project-context.sh`, `test-interview-ledger.sh`, `test-git-checkpoint.sh` — testlər
+- `tests/hooks/test-project-context.sh`, `test-interview-ledger.sh`, `test-git-checkpoint.sh`, `test-commit-nudge.sh` — testlər
 
 **Upstream fayllarına toxunulan yerlər** (merge zamanı konflikt ehtimalı olan siyahı —
 yenilik gələndə əvvəlcə bunlara bax):
@@ -265,7 +284,8 @@ yenilik gələndə əvvəlcə bunlara bax):
 | Fayl | Nə əlavə edilib |
 | --- | --- |
 | `hooks/session-start` | Kontekst blokunun inject edilməsi |
-| `hooks/hooks.json` | `Stop` (2 giriş), `UserPromptSubmit` və `PreToolUse` hook-larının qeydiyyatı |
+| `hooks/hooks.json` | `Stop` (3 giriş), `UserPromptSubmit` və `PreToolUse` hook-larının qeydiyyatı |
+| `skills/systematic-debugging/SKILL.md` | 1-ci fazada tarixçə istintaqı skill-inə keçid |
 | `skills/brainstorming/SKILL.md` | "Record What They Tell You" bölməsi, 2 checklist bəndi, 2 red-flag sətri, coverage gate |
 | `skills/writing-plans/SKILL.md` | "Ledger Coverage" bölməsi |
 | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` | Fork kimliyi, `version` sahəsinin silinməsi |

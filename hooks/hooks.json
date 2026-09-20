@@ -33,6 +33,16 @@
             "async": true
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd\" commit-nudge",
+            "shell": "bash",
+            "async": false
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -49,7 +59,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell",
         "hooks": [
           {
             "type": "command",

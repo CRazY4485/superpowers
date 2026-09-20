@@ -66,6 +66,9 @@ You MUST complete each phase before proceeding to the next.
    - Git diff, recent commits
    - New dependencies, config changes
    - Environmental differences
+   - If it worked before, the history holds the answer: use
+     `superpowers:investigating-with-git-history` (bisect, `log -S`, blame)
+     instead of guessing which change did it
 
 4. **Gather Evidence in Multi-Component Systems**
 
@@ -281,3 +284,4 @@ These techniques are part of systematic debugging and available in this director
 - **`root-cause-tracing.md`** - Trace bugs backward through call stack to find original trigger
 - **`defense-in-depth.md`** - Add validation at multiple layers after finding root cause
 - **`condition-based-waiting.md`** - Replace arbitrary timeouts with condition polling
+- **`superpowers:investigating-with-git-history`** - Find the first bad commit and read why a line exists

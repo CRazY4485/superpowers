@@ -34,13 +34,27 @@ process.stdin.on("end", () => {
 tool_name="${parsed%%${sep}*}"
 command_text="${parsed#*${sep}}"
 
-[ "$tool_name" = "Bash" ] || exit 0
+case "$tool_name" in
+    Bash | PowerShell) ;;
+    *) exit 0 ;;
+esac
 [ -n "$command_text" ] || exit 0
 
-# Commands that can throw away work that is not in a commit.
-destructive_pattern='git([[:space:]]+-[^[:space:]]+)*[[:space:]]+(checkout[[:space:]]+(--[[:space:]]|\.)|restore([[:space:]]|$)|reset[[:space:]]+(--hard|--merge|--keep)|clean[[:space:]]+-[a-zA-Z]*f|stash[[:space:]]+(drop|clear|pop)|branch[[:space:]]+-D|rebase([[:space:]]|$)|push[[:space:]].*--force|commit[[:space:]].*--amend)'
+# Git commands that discard work or rewrite history.
+git_pattern='git([[:space:]]+-[^[:space:]]+)*[[:space:]]+(checkout[[:space:]]+(--[[:space:]]|\.)|restore([[:space:]]|$)|reset[[:space:]]+(--hard|--merge|--keep)|clean[[:space:]]+-[a-zA-Z]*f|stash[[:space:]]+(drop|clear|pop)|branch[[:space:]]+-D|rebase([[:space:]]|$)|push[[:space:]].*--force|commit[[:space:]].*--amend)'
 
-printf '%s' "$command_text" | grep -qE "$destructive_pattern" || exit 0
+# Everything else that deletes work in bulk. A single-file `rm notes.txt` is
+# deliberate and narrow; recursive and forced deletes are the ones that take
+# an afternoon with them.
+bulk_delete_pattern='(^|[;&|[:space:]])(rm[[:space:]]+-[a-zA-Z]*[rRf]|shred[[:space:]]|truncate[[:space:]]+-s|find[[:space:]].*(-delete|-exec[[:space:]]+rm)|Remove-Item[[:space:]].*-(Recurse|Force)|Clear-Content[[:space:]]|rmdir[[:space:]]+/[sS]|del[[:space:]]+/[sSqQ])'
+
+if printf '%s' "$command_text" | grep -qE "$git_pattern"; then
+    command_class="git"
+elif printf '%s' "$command_text" | grep -qE "$bulk_delete_pattern"; then
+    command_class="bulk-delete"
+else
+    exit 0
+fi
 
 git -C "$PROJECT_DIR" rev-parse --git-dir >/dev/null 2>&1 || exit 0
 
@@ -64,9 +78,14 @@ if [ -n "$snapshot" ]; then
     message+=$'\n'"A checkpoint of the whole working tree was saved first: ${sha}."
     message+=$'\n'"Recover afterwards with: git diff HEAD ${sha} | inspect, git checkout ${sha} -- <path> | one file, git checkout ${sha} -- . | everything."
     message+=$'\n'"Tell your human partner the checkpoint exists if the command turns out to be a mistake."
-else
+elif [ "$command_class" = "git" ]; then
+    # Worth stating for history-touching commands: it tells the agent the
+    # operation is safe. Bulk deletes are frequent enough that saying it every
+    # time would be noise, so those stay silent when there is nothing at risk.
     message="About to run: ${short_command}"
     message+=$'\n'"There is nothing uncommitted to lose - the working tree matches the last commit or the last checkpoint."
+else
+    exit 0
 fi
 
 escaped=$(escape_for_json "$message")

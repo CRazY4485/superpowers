@@ -29,18 +29,35 @@ previous checkpoint, or outside a git repository. Old refs are pruned to
 
 ## The guard
 
-`hooks/git-guard` reads the pending Bash command and matches it against the
-work-destroying set: `reset --hard/--merge/--keep`, `checkout -- `, `restore`,
-`clean -f*`, `stash drop|clear|pop`, `branch -D`, `rebase`, `commit --amend`,
-`push --force`.
+`hooks/git-guard` reads the pending command from the `Bash` or `PowerShell`
+tool and matches it against two sets:
+
+| Class | Patterns | When nothing is at risk |
+|-------|----------|-------------------------|
+| git | `reset --hard/--merge/--keep`, `checkout -- `, `restore`, `clean -f*`, `stash drop\|clear\|pop`, `branch -D`, `rebase`, `commit --amend`, `push --force` | Says so - knowing the operation is safe is worth a line |
+| bulk delete | `rm -r*/-f*`, `shred`, `truncate -s`, `find … -delete`, `find … -exec rm`, `Remove-Item … -Recurse/-Force`, `Clear-Content`, `rmdir /s`, `del /s\|/q` | Stays silent - these are frequent, and narration would be noise |
+
+A single-file `rm notes.txt` is deliberate and narrow, so it is not guarded;
+recursive and forced deletes are the ones that take an afternoon with them.
 
 On a match it takes a checkpoint and returns `additionalContext` naming the
 sha and the three recovery commands. **It never blocks.** Blocking a deliberate
 command is friction; losing uncommitted work is damage - the guard converts the
-second into the first. With a clean tree it says there is nothing to lose.
+second into the first.
 
 It needs `node` to parse the hook payload; without node it exits silently, so
 the guard degrades to nothing rather than breaking the tool call.
+
+## The commit nudge
+
+`hooks/commit-nudge` runs on `Stop` and says nothing unless the working tree
+has drifted from the last commit: at least `SUPERPOWERS_COMMIT_NUDGE_FILES`
+files changed (default 5), or more than `SUPERPOWERS_COMMIT_NUDGE_AGE` seconds
+since the last commit (default 2700) with the tree dirty. Untracked files count;
+ignored files do not. Throttled per project, default 1800s.
+
+It exists because checkpoints are a floor, not a record. The message says so:
+commit what passes, in logical pieces, with messages that say why.
 
 ## Using them
 
@@ -65,6 +82,9 @@ git checkout <sha> -- .                # everything, overwrites current edits
 | Variable | Default | Effect |
 |----------|---------|--------|
 | `SUPERPOWERS_CHECKPOINT_KEEP` | 50 | Checkpoint refs kept per repo |
+| `SUPERPOWERS_COMMIT_NUDGE_FILES` | 5 | Changed files before the commit nudge fires |
+| `SUPERPOWERS_COMMIT_NUDGE_AGE` | 2700 | Seconds since the last commit before it fires |
+| `SUPERPOWERS_COMMIT_NUDGE_THROTTLE` | 1800 | Minimum gap between commit nudges |
 
 ## Limits worth knowing
 
@@ -80,9 +100,10 @@ git checkout <sha> -- .                # everything, overwrites current edits
 
 ```bash
 bash tests/hooks/test-git-checkpoint.sh
+bash tests/hooks/test-commit-nudge.sh
 ```
 
-28 assertions: silence outside a repo and on a clean tree, tracked and untracked
+33 assertions: silence outside a repo and on a clean tree, tracked and untracked
 capture, `.gitignore` respected, index/worktree/branch left untouched,
 deduplication, unborn HEAD, pruning, listing, the silent turn hook, and the
-guard's four cases.
+guard's cases for git commands, bulk deletes, PowerShell and the unguarded single-file rm. The commit nudge adds 7 more: non-repo, clean tree, small recent change, wide change, throttling, long-uncommitted work, and ignored files.

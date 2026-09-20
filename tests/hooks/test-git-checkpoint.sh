@@ -200,6 +200,39 @@ fi
 assert_equal "no checkpoint is written for a clean tree" "$(checkpoint_count "$cleanrepo")" "0"
 
 echo
+echo "Guard beyond git commands"
+
+rmrepo="$(new_repo guard-rm)"
+seed_commit "$rmrepo"
+echo "in progress" >> "$rmrepo/a.txt"
+
+output="$(run_guard "$rmrepo" '{"tool_name":"Bash","tool_input":{"command":"rm -rf build/"}}')"
+if printf '%s' "$output" | node "$SCRIPT_DIR/assert-pretooluse.cjs" "checkpoint" "rm -rf build/"; then
+    pass "rm -rf is guarded like a destructive git command"
+else
+    fail "rm -rf is guarded like a destructive git command"
+    printf '%s\n' "$output" | sed 's/^/        /'
+fi
+assert_equal "rm -rf produced a checkpoint" "$(checkpoint_count "$rmrepo")" "1"
+
+echo "more work" >> "$rmrepo/a.txt"
+output="$(run_guard "$rmrepo" '{"tool_name":"PowerShell","tool_input":{"command":"Remove-Item -Recurse -Force dist"}}')"
+if printf '%s' "$output" | node "$SCRIPT_DIR/assert-pretooluse.cjs" "checkpoint" "Remove-Item"; then
+    pass "PowerShell recursive deletes are guarded too"
+else
+    fail "PowerShell recursive deletes are guarded too"
+    printf '%s\n' "$output" | sed 's/^/        /'
+fi
+
+output="$(run_guard "$rmrepo" '{"tool_name":"Bash","tool_input":{"command":"rm notes.txt"}}')"
+assert_empty "a plain single-file rm is not guarded" "$output"
+
+quiet="$(new_repo guard-rm-clean)"
+seed_commit "$quiet"
+output="$(run_guard "$quiet" '{"tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/scratch-dir"}}')"
+assert_empty "with nothing to lose a non-git delete stays silent" "$output"
+
+echo
 if [ "$FAILURES" -eq 0 ]; then
     echo "All git checkpoint tests passed"
 else

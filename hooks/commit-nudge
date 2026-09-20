@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Stop hook: make uncommitted work visible before it becomes a loss.
+#
+# Checkpoints cover the accident; they are local, pruned and invisible to your
+# human partner. A commit is what actually keeps work. This says so when the
+# working tree has drifted far from the last commit.
+#
+# Prints a Stop hook payload on stdout, or nothing. Always exits 0.
+
+set -uo pipefail
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+
+git -C "$PROJECT_DIR" rev-parse --git-dir >/dev/null 2>&1 || exit 0
+
+FILE_THRESHOLD="${SUPERPOWERS_COMMIT_NUDGE_FILES:-5}"
+AGE_SECONDS="${SUPERPOWERS_COMMIT_NUDGE_AGE:-2700}"
+THROTTLE_SECONDS="${SUPERPOWERS_COMMIT_NUDGE_THROTTLE:-1800}"
+STATE_DIR="${SUPERPOWERS_COMMIT_NUDGE_STATE_DIR:-${TMPDIR:-/tmp}/superpowers-commit-nudge}"
+
+file_mtime() {
+    stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0
+}
+
+# Untracked files count as uncommitted work; ignored files do not.
+changed=$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null | grep -c . || true)
+[ -n "$changed" ] || changed=0
+[ "$changed" -gt 0 ] || exit 0
+
+now=$(date +%s)
+last_commit=$(git -C "$PROJECT_DIR" log -1 --format=%ct 2>/dev/null || echo 0)
+[ -n "$last_commit" ] || last_commit=0
+if [ "$last_commit" -gt 0 ]; then
+    age=$((now - last_commit))
+else
+    age="$AGE_SECONDS"
+fi
+
+if [ "$changed" -lt "$FILE_THRESHOLD" ] && [ "$age" -le "$AGE_SECONDS" ]; then
+    exit 0
+fi
+
+key=$(printf '%s' "$PROJECT_DIR" | cksum | tr -cd '0-9' | cut -c1-16)
+marker="${STATE_DIR}/${key}"
+if [ -f "$marker" ]; then
+    if [ $((now - $(file_mtime "$marker"))) -lt "$THROTTLE_SECONDS" ]; then
+        exit 0
+    fi
+fi
+mkdir -p "$STATE_DIR" 2>/dev/null || true
+: > "$marker" 2>/dev/null || true
+
+hours=$((age / 3600))
+minutes=$(((age % 3600) / 60))
+if [ "$hours" -gt 0 ]; then
+    age_text="${hours}h ${minutes}m"
+else
+    age_text="${minutes}m"
+fi
+
+if [ "$changed" -eq 1 ]; then
+    subject="1 file carries uncommitted work"
+else
+    subject="${changed} files carry uncommitted work"
+fi
+
+printf '{\n'
+printf '  "hookSpecificOutput": {\n'
+printf '    "hookEventName": "Stop",\n'
+printf '    "additionalContext": "Commit check: %s, and %s has passed since the last commit. Commit whatever currently passes its tests, in logical pieces with messages that say why - the automatic checkpoints are local and pruned, so they are a floor under accidents, not a record. See superpowers:recovering-work-with-git. If the work genuinely is not committable yet, say what is blocking it."\n' \
+    "$subject" "$age_text"
+printf '  }\n'
+printf '}\n'
+
+exit 0
