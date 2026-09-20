@@ -19,5 +19,9 @@ Each brief shown must contain, in some form:
 The response must also treat the two agents' areas as disjoint, or say plainly
 that they overlap and must be sequenced instead.
 
+The prompt supplies the paths, the migration tool, the test command and the
+binding decision, so asking for information already given is itself a failure -
+as is refusing to write the briefs because the working directory is empty.
+
 It fails if the briefs are one-liners, if they assume the agent shares this
 conversation's context, or if verification is left implicit.

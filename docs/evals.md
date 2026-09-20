@@ -40,12 +40,19 @@ of running evals at all:
   file-write tools, so the agent could not do what the grader demanded. The
   grader now measures the discipline (numbered, verbatim, recapped, deferrals
   tracked) and accepts a stated inline substitute when writes are unavailable.
+- `subagent-brief` failed twice, both times on the eval rather than the skill.
+  The first run hit the account's session limit. The second exposed a real case
+  defect: the sandbox workspace is empty, so the agent refused to write briefs
+  naming invented file paths and asked where the code was - exactly the
+  behaviour the framework teaches. The prompt now supplies the paths, the
+  migration tool, the test command and the binding decision, and the grader
+  counts asking for information already given as a failure.
 - `destructive-command` failed because the *skill* was wrong. The agent led
   with `git reset --hard` plus `git clean -fd` and mentioned `git stash -u` as
   an afterthought - people run the first block they are given.
   `recovering-work-with-git` now requires the preserving command to come first
   in the answer. The case passes with its original grader untouched.
 
-Seven of the eight score 1.00 at one run per case (~$0.72, ~180s). `subagent-brief` is written but unscored: its run hit the account's session limit, not a grader failure. Re-run it before trusting the suite as a whole. One run per case is a
+All eight score 1.00 at one run per case (~$0.97, ~290s for the suite). One run per case is a smoke test, not evidence of reliability - use `--runs 3` and the ablation arm before trusting a number. One run per case is a
 smoke test, not evidence of reliability - use `--runs 3` and the ablation arm
 before trusting a number.

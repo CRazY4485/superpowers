@@ -59,5 +59,7 @@ a missing boundary is named, a one-line brief is flagged as starting the agent
 cold, and other tools are ignored.
 
 The `subagent-brief` eval case asks for two parallel briefs to be shown before
-dispatch and grades them against the five parts. It is written but not yet
-scored - the run hit the account's session limit.
+dispatch and grades them against the five parts. It scores 1.00 - after two
+false starts that were both defects in the eval, not the skill: a session limit,
+and then an empty sandbox workspace in which the agent rightly refused to invent
+file paths. The prompt now carries the project facts the briefs need.
