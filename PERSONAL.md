@@ -244,6 +244,42 @@ hansı tarixçədə təhlükəsiz olduğu (`revert` vs `reset --soft` vs `--hard
 
 Detallar və limitlər: `docs/git-checkpoints.md`.
 
+## Commit qapısı, branch qoruyucusu və eval-lar (fork-a xas)
+
+**Commit qapısı** (`PreToolUse`, `git commit` əmrində): staged diff-ə baxır.
+Buradakı yeganə **bloklayan** mexanizmdir, çünki hər ikisi tarixçəyə düşəndən sonra
+bahalıdır:
+
+| Tapıntı | Nəticə |
+| --- | --- |
+| Həll olunmamış konflikt markerləri | **blok** |
+| AWS açarı, private key bloku, GitHub/Slack token, `sk-` API açarı | **blok** |
+| `password = "..."` tipli literal | xəbərdarlıq |
+| 5 MB-dan böyük staged fayl | xəbərdarlıq |
+
+Tapıntılar **adı və yeri ilə** bildirilir, dəyəri ilə yox — sirri transkriptə yazmaq
+onun daha bir nüsxəsini yaratmaq deməkdir.
+
+**Branch qoruyucusu** (`PreToolUse`, `Edit|Write`): layihə içindəki redaktə default
+branch-də (origin/HEAD, yoxsa `main`/`master`/`trunk`) baş verirsə, saatda bir dəfə
+xatırladır. Bloklamır — bəzən məhz `main`-ə düzəliş istənir.
+
+**Merge konflikti:** `superpowers:resolving-merge-conflicts` — iki mətni deyil,
+**iki niyyəti** uzlaşdırmaq; `zdiff3`, lockfile-ları yenidən generasiya etmək,
+`rerere`, və anlamırsansa `merge --abort` (pulsuzdur). `finishing-a-development-branch`
+merge addımından ona keçid qoyulub.
+
+**Eval-lar** (`plugin-evals/`): skill-lərin real sessiyada tutub-tutmadığını ölçür.
+
+```bash
+claude plugin eval C:/obra2 --runs 1 --ablation none --trust-plugin --no-publish
+```
+
+İlk işlətmə iki qüsur tapdı: biri eval-ın özündə (case Write aləti vermirdi),
+**biri isə skill-də** — agent `reset --hard`+`clean -fd` ilə başlayıb `stash -u`-nu
+sonda qeyd edirdi; insan ona verilən **ilk** bloku işlədir. `recovering-work-with-git`
+indi qoruyan əmrin birinci gəlməsini tələb edir. Detallar: `docs/evals.md`.
+
 ## Hansı qovluqlar əhəmiyyətlidir
 
 Claude Code üçün yalnız bunlar işləyir:
@@ -272,11 +308,14 @@ konfliktləri çıxacaq.
 - `skills/keeping-an-interview-ledger/` — müsahibə reyestri skill-i və şablon
 - `skills/recovering-work-with-git/` — commit tezliyi, undo seçimi, bərpa nərdivanı
 - `skills/investigating-with-git-history/` — bisect, `log -S`, blame ilə sübut toplamaq
+- `skills/resolving-merge-conflicts/` — konfliktləri niyyət səviyyəsində həll etmək
 - `hooks/project-context`, `hooks/context-nudge`, `hooks/interview-context` — inject və xatırlatma hook-ları
 - `hooks/git-checkpoint`, `hooks/checkpoint-turn`, `hooks/git-guard`, `hooks/commit-nudge` — checkpoint mühərriki, turluq snapshot, təhlükəli əmr qoruyucusu, commit xatırlatması
+- `hooks/commit-gate`, `hooks/branch-guard` — sirr/konflikt/böyük fayl qapısı, default branch xatırlatması
+- `plugin-evals/` — davranış eval-ları (4 case), `docs/evals.md`
 - `commands/` — `context-init`, `context-save`, `interview-status`, `interview-close`, `checkpoints`
 - `docs/project-context.md`, `docs/interview-ledger.md`, `docs/git-checkpoints.md` — sənədlər
-- `tests/hooks/test-project-context.sh`, `test-interview-ledger.sh`, `test-git-checkpoint.sh`, `test-commit-nudge.sh` — testlər
+- `tests/hooks/test-project-context.sh`, `test-interview-ledger.sh`, `test-git-checkpoint.sh`, `test-commit-nudge.sh`, `test-commit-gate.sh` — testlər
 
 **Upstream fayllarına toxunulan yerlər** (merge zamanı konflikt ehtimalı olan siyahı —
 yenilik gələndə əvvəlcə bunlara bax):
@@ -286,6 +325,7 @@ yenilik gələndə əvvəlcə bunlara bax):
 | `hooks/session-start` | Kontekst blokunun inject edilməsi |
 | `hooks/hooks.json` | `Stop` (3 giriş), `UserPromptSubmit` və `PreToolUse` hook-larının qeydiyyatı |
 | `skills/systematic-debugging/SKILL.md` | 1-ci fazada tarixçə istintaqı skill-inə keçid |
+| `skills/finishing-a-development-branch/SKILL.md` | Merge addımında konflikt skill-inə keçid |
 | `skills/brainstorming/SKILL.md` | "Record What They Tell You" bölməsi, 2 checklist bəndi, 2 red-flag sətri, coverage gate |
 | `skills/writing-plans/SKILL.md` | "Ledger Coverage" bölməsi |
 | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` | Fork kimliyi, `version` sahəsinin silinməsi |

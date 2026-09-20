@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# PreToolUse hook: say something the first time a session edits files while
+# sitting on the repository's default branch.
+#
+# It does not block - sometimes a direct edit to main is exactly what was
+# asked for - and it speaks once per throttle window, not once per edit.
+#
+# Prints a PreToolUse payload on stdout, or nothing. Always exits 0.
+
+set -uo pipefail
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+THROTTLE_SECONDS="${SUPERPOWERS_BRANCH_GUARD_THROTTLE:-3600}"
+STATE_DIR="${SUPERPOWERS_BRANCH_GUARD_STATE_DIR:-${TMPDIR:-/tmp}/superpowers-branch-guard}"
+
+payload=$(cat 2>/dev/null || true)
+[ -n "$payload" ] || exit 0
+command -v node >/dev/null 2>&1 || exit 0
+
+sep=$'\x1f'
+parsed=$(printf '%s' "$payload" | node -e '
+let raw = "";
+process.stdin.on("data", (d) => { raw += d; });
+process.stdin.on("end", () => {
+  try {
+    const p = JSON.parse(raw);
+    const input = p.tool_input || {};
+    const path = input.file_path || input.notebook_path || "";
+    process.stdout.write(`${p.tool_name || ""}\u001f${path}`);
+  } catch (error) {
+    process.stdout.write("");
+  }
+});' 2>/dev/null)
+
+[ -n "$parsed" ] || exit 0
+tool_name="${parsed%%${sep}*}"
+file_path="${parsed#*${sep}}"
+
+case "$tool_name" in
+    Edit | Write | NotebookEdit) ;;
+    *) exit 0 ;;
+esac
+
+# Only care about edits inside the project itself.
+case "$file_path" in
+    "${PROJECT_DIR}"*) ;;
+    *) exit 0 ;;
+esac
+
+git -C "$PROJECT_DIR" rev-parse --git-dir >/dev/null 2>&1 || exit 0
+
+branch=$(git -C "$PROJECT_DIR" symbolic-ref --short -q HEAD 2>/dev/null || true)
+[ -n "$branch" ] || exit 0
+
+default_branch=$(git -C "$PROJECT_DIR" symbolic-ref --short -q refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##' || true)
+if [ -z "$default_branch" ]; then
+    case "$branch" in
+        main | master | trunk) default_branch="$branch" ;;
+        *) default_branch="" ;;
+    esac
+fi
+
+[ -n "$default_branch" ] || exit 0
+[ "$branch" = "$default_branch" ] || exit 0
+
+file_mtime() {
+    stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0
+}
+
+key=$(printf '%s' "${PROJECT_DIR}|${branch}" | cksum | tr -cd '0-9' | cut -c1-16)
+marker="${STATE_DIR}/${key}"
+if [ -f "$marker" ]; then
+    if [ $(( $(date +%s) - $(file_mtime "$marker") )) -lt "$THROTTLE_SECONDS" ]; then
+        exit 0
+    fi
+fi
+mkdir -p "$STATE_DIR" 2>/dev/null || true
+: > "$marker" 2>/dev/null || true
+
+message="This edit lands on ${branch}, the default branch of this repository."
+message+=$'\n'"Unless your human partner asked for a direct change to ${branch}, branch first: git checkout -b <name>. A branch keeps ${branch} releasable, makes the work reviewable in one diff, and makes abandoning it free."
+message+=$'\n'"If staying on ${branch} is deliberate, carry on - this is said once, not every edit."
+
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+escaped=$(escape_for_json "$message")
+
+printf '{\n'
+printf '  "hookSpecificOutput": {\n'
+printf '    "hookEventName": "PreToolUse",\n'
+printf '    "additionalContext": "%s"\n' "$escaped"
+printf '  }\n'
+printf '}\n'
+
+exit 0

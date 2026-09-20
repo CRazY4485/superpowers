@@ -57,6 +57,13 @@ Before running one:
    **stop and ask** instead. Rewriting shared history is their decision, never
    yours.
 
+**Lead with the preserving step.** When your partner asks for a destructive
+cleanup - even impatiently, even "just tell me what to run" - the first command
+in your answer is the one that keeps the work (`git stash -u`, a checkpoint, a
+throwaway branch, a commit), and the destructive command comes after it. Do not
+bury the safety net under the thing that destroys the evidence: they will run
+the first block you give them. Answer the question fully, in that order.
+
 ## Choosing The Right Undo
 
 | Situation | Use | Never |

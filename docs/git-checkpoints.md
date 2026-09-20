@@ -59,6 +59,30 @@ ignored files do not. Throttled per project, default 1800s.
 It exists because checkpoints are a floor, not a record. The message says so:
 commit what passes, in logical pieces, with messages that say why.
 
+## The commit gate
+
+`hooks/commit-gate` (PreToolUse, `Bash|PowerShell`) inspects the staged diff
+whenever the command is a `git commit`. It is the one hook here that blocks,
+because both things it blocks are expensive once they are in history:
+
+| Finding | Action |
+| --- | --- |
+| Unresolved conflict markers in added lines | **deny** |
+| AWS access key id, private key block, GitHub token, Slack token, `sk-` API key | **deny** |
+| Credential-shaped literal (`password = "..."`) | warn |
+| Staged file over `SUPERPOWERS_COMMIT_MAX_FILE_BYTES` (default 5 MB) | warn |
+
+Findings are reported by name and location, never by value - echoing a secret
+into the transcript is another copy of the secret.
+
+## The branch guard
+
+`hooks/branch-guard` (PreToolUse, `Edit|Write|NotebookEdit`) speaks once per
+hour per branch when an edit inside the project lands while HEAD is the
+repository's default branch (from `origin/HEAD`, or `main`/`master`/`trunk`
+when there is no remote). It never blocks: editing `main` directly is sometimes
+exactly the request.
+
 ## Using them
 
 ```bash

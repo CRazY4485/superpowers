@@ -99,6 +99,10 @@ git merge <feature-branch>
 <test command>
 ```
 
+If the merge reports conflicts: resolve them with
+`superpowers:resolving-merge-conflicts` — reconstruct both intentions rather
+than taking a side, and run the full suite on the result.
+
 If tests fail on the merged result: stop, leave the worktree and branch in
 place, and investigate — nothing has been pushed, so the merge is local
 and recoverable.

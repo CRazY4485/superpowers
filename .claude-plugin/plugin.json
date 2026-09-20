@@ -15,5 +15,8 @@
     "collaboration",
     "best-practices",
     "workflows"
-  ]
+  ],
+  "experimental": {
+    "evals": "plugin-evals"
+  }
 }

@@ -20,17 +20,28 @@ if (!hookOutput || hookOutput.hookEventName !== "PreToolUse") {
   fail("payload is not a PreToolUse hook result");
 }
 
-if (hookOutput.permissionDecision && hookOutput.permissionDecision !== "allow") {
-  fail(`guard must not block the call, got: ${hookOutput.permissionDecision}`);
+const args = process.argv.slice(2);
+const expectDeny = args[0] === "--deny";
+const needles = expectDeny ? args.slice(1) : args;
+
+if (expectDeny) {
+  if (hookOutput.permissionDecision !== "deny") {
+    fail(`expected a deny decision, got: ${hookOutput.permissionDecision}`);
+  }
+} else if (hookOutput.permissionDecision && hookOutput.permissionDecision !== "allow") {
+  fail(`hook must not block the call, got: ${hookOutput.permissionDecision}`);
 }
 
-const context = hookOutput.additionalContext;
+const context = expectDeny
+  ? hookOutput.permissionDecisionReason
+  : hookOutput.additionalContext;
+
 if (typeof context !== "string" || context.trim() === "") {
-  fail("guard produced no additionalContext");
+  fail(expectDeny ? "deny carried no reason" : "hook produced no additionalContext");
 }
 
-for (const needle of process.argv.slice(2)) {
+for (const needle of needles) {
   if (!context.includes(needle)) {
-    fail(`context did not contain: ${needle}`);
+    fail(`text did not contain: ${needle}`);
   }
 }
