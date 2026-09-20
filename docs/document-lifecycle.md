@@ -106,8 +106,8 @@ bash tests/hooks/test-doc-lint.sh
 bash tests/hooks/test-decision-lint.sh
 ```
 
-12 assertions for the document front matter and 18 for the decision ledger,
-including the two number rules.
+17 assertions for the document front matter, including both sides of the
+adoption boundary, and 18 for the decision ledger, including the two number rules.
 
 ## Not in this slice
 
