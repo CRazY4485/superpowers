@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+# Lint the documents a project accumulates: specs, plans, and anything else
+# carrying the framework's front matter.
+#
+#   doc-lint <project-dir>
+#
+# Prints one finding per line - "ERROR <file>:<line> <message>" or "WARN ..." -
+# and exits 1 when any ERROR was found.
+#
+# Front matter:
+#   ---
+#   status: draft | active | delivered | superseded | invalidated | abandoned
+#   created: YYYY-MM-DD
+#   derived-from: <path>          # what this document was built from
+#   decisions: D0006, D0011       # the decisions it rests on
+#   delivered-by: <commit or PR>  # required when status is delivered
+#   superseded-by: <path>         # required when status is superseded
+#   invalidated-by: D0021         # required when status is invalidated
+#   abandoned-by: D0021           # required when status is abandoned
+#   ---
+#
+# Every terminal and backward status has to point at something: a commit, a
+# document, or a decision. That is what keeps a stage change from happening
+# silently.
+
+set -uo pipefail
+
+PROJECT_DIR="${1:-${CLAUDE_PROJECT_DIR:-$PWD}}"
+[ -d "$PROJECT_DIR" ] || exit 0
+
+LEDGER="${PROJECT_DIR}/.claude/context/decisions.md"
+
+# Known decision ids and their status, as "D0001=active" lines.
+ledger_index=""
+if [ -f "$LEDGER" ]; then
+    ledger_index=$(grep -E '^## D[0-9]{4} \| ' "$LEDGER" 2>/dev/null \
+        | awk -F' \\| ' '{ id = $1; sub(/^## /, "", id); print id "=" $3 }' || true)
+fi
+
+ledger_status() {
+    [ -n "$ledger_index" ] || { printf 'missing'; return; }
+    local row
+    row=$(printf '%s\n' "$ledger_index" | grep -m1 "^${1}=" || true)
+    if [ -z "$row" ]; then printf 'missing'; else printf '%s' "${row#*=}"; fi
+}
+
+documents=$(find "$PROJECT_DIR/docs" -type f -name '*.md' 2>/dev/null | sort || true)
+[ -n "$documents" ] || exit 0
+
+status=0
+emit() {
+    printf '%s\n' "$1"
+    case "$1" in ERROR*) status=1 ;; esac
+}
+
+field_of() {
+    # field_of <file> <name> -> value, from the front matter block only
+    awk -v want="$2" '
+        NR == 1 && $0 != "---" { exit }
+        NR > 1 && $0 == "---" { exit }
+        NR > 1 {
+            line = $0
+            idx = index(line, ":")
+            if (idx == 0) next
+            key = substr(line, 1, idx - 1)
+            val = substr(line, idx + 1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+            if (key == want) { print val; exit }
+        }
+    ' "$1"
+}
+
+for doc in $documents; do
+    rel="${doc#"$PROJECT_DIR"/}"
+    head_line=$(head -1 "$doc" 2>/dev/null || true)
+
+    is_framework_doc=0
+    case "$rel" in
+        docs/superpowers/specs/*.md | docs/superpowers/plans/*.md) is_framework_doc=1 ;;
+    esac
+    [ "$head_line" = "---" ] && is_framework_doc=1
+    [ "$is_framework_doc" = "1" ] || continue
+
+    doc_status=$(field_of "$doc" "status")
+    if [ -z "$doc_status" ]; then
+        emit "ERROR ${rel}:1 no front matter status - a document nobody can date or place is sediment"
+        continue
+    fi
+
+    case "$doc_status" in
+        draft | active | delivered | superseded | invalidated | abandoned) ;;
+        *)
+            emit "ERROR ${rel}:1 status '${doc_status}' is outside the vocabulary (draft, active, delivered, superseded, invalidated, abandoned)"
+            continue
+            ;;
+    esac
+
+    # Terminal and backward states must name what moved them.
+    case "$doc_status" in
+        delivered)
+            [ -n "$(field_of "$doc" "delivered-by")" ] \
+                || emit "ERROR ${rel}:1 status delivered needs delivered-by: the commit or PR that delivered it"
+            ;;
+        superseded)
+            target=$(field_of "$doc" "superseded-by")
+            if [ -z "$target" ]; then
+                emit "ERROR ${rel}:1 status superseded needs superseded-by: the document that replaced it"
+            elif [ ! -f "${PROJECT_DIR}/${target}" ]; then
+                emit "ERROR ${rel}:1 superseded-by points at ${target}, which does not exist"
+            fi
+            ;;
+        invalidated)
+            [ -n "$(field_of "$doc" "invalidated-by")" ] \
+                || emit "ERROR ${rel}:1 status invalidated needs invalidated-by: the decision that recorded the rework"
+            ;;
+        abandoned)
+            [ -n "$(field_of "$doc" "abandoned-by")" ] \
+                || emit "ERROR ${rel}:1 status abandoned needs abandoned-by: the decision that recorded the reason"
+            ;;
+    esac
+
+    derived=$(field_of "$doc" "derived-from")
+    if [ -n "$derived" ]; then
+        [ -f "${PROJECT_DIR}/${derived}" ] \
+            || emit "ERROR ${rel}:1 derived-from points at ${derived}, which does not exist"
+    else
+        case "$rel" in
+            docs/superpowers/plans/*.md)
+                if [ "$doc_status" != "abandoned" ]; then
+                    emit "WARN ${rel}:1 no derived-from - without it, nothing can tell this plan that its spec changed"
+                fi
+                ;;
+        esac
+    fi
+
+    decisions=$(field_of "$doc" "decisions")
+    if [ -n "$decisions" ]; then
+        for id in $(printf '%s' "$decisions" | tr ',' ' '); do
+            id=$(printf '%s' "$id" | tr -cd 'D0-9')
+            [ -n "$id" ] || continue
+            case "$(ledger_status "$id")" in
+                missing)
+                    emit "ERROR ${rel}:1 decisions names ${id}, which is not in the decision ledger"
+                    ;;
+                superseded | withdrawn)
+                    if [ "$doc_status" = "active" ] || [ "$doc_status" = "draft" ]; then
+                        emit "WARN ${rel}:1 rests on ${id}, which is no longer in force - this document may need rework"
+                    fi
+                    ;;
+            esac
+        done
+    elif [ "$doc_status" = "active" ]; then
+        case "$rel" in
+            docs/superpowers/specs/*.md | docs/superpowers/plans/*.md)
+                emit "WARN ${rel}:1 names no decisions - either it rests on none, or the link was never written"
+                ;;
+        esac
+    fi
+done
+
+exit "$status"

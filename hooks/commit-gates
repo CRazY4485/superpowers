@@ -200,6 +200,23 @@ check_decisions() {
         [ -n "$file" ] || continue
         staged_copy="${workdir}/$(printf '%s' "$file" | tr '/' '_')"
         git -C "$PROJECT_DIR" show ":${file}" > "$staged_copy" 2>/dev/null || continue
+
+        # A number that was used once is spent. Deleting an entry would free it
+        # for reuse and make every earlier reference to it ambiguous - withdraw
+        # the decision instead, which keeps the number in place.
+        local committed_ids staged_ids gone
+        committed_ids=$(git -C "$PROJECT_DIR" show "HEAD:${file}" 2>/dev/null \
+            | grep -oE '^## D[0-9]{4}' | sed 's/^## //' | sort -u || true)
+        if [ -n "$committed_ids" ]; then
+            staged_ids=$(grep -oE '^## D[0-9]{4}' "$staged_copy" | sed 's/^## //' | sort -u || true)
+            gone=$(comm -23 <(printf '%s\n' "$committed_ids") <(printf '%s\n' "$staged_ids") 2>/dev/null || true)
+            if [ -n "${gone//[[:space:]]/}" ]; then
+                while IFS= read -r id; do
+                    [ -n "$id" ] || continue
+                    findings+="ERROR ${file} ${id} was removed from the log - a spent decision number is never freed; mark it withdrawn instead"$'\n'
+                done < <(printf '%s\n' "$gone")
+            fi
+        fi
         # Report against the real path, not the temp copy.
         out=$(bash "${SCRIPT_DIR}/decision-lint" "$staged_copy" 2>/dev/null | sed "s#${staged_copy}#${file}#g")
         [ -n "$out" ] && findings+="${out}"$'\n'

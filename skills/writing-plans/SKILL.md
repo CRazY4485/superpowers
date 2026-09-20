@@ -18,6 +18,25 @@ Assume they are a skilled developer, but know almost nothing about our toolset o
 **Save plans to:** `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`
 - (User preferences for plan location override this default)
 
+Every spec and plan is born with front matter, because nothing can propagate a
+later change without it:
+
+```yaml
+---
+status: active
+created: YYYY-MM-DD
+derived-from: docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md   # plans only
+decisions: D0006, D0011
+---
+```
+
+`status` moves only through the vocabulary `draft / active / delivered /
+superseded / invalidated / abandoned`, and every terminal or backward status
+names what moved it - `delivered-by`, `superseded-by`, `invalidated-by`,
+`abandoned-by`. When an earlier stage turns out wrong, that is a recorded move:
+`superpowers:reworking-earlier-stages`. `bash hooks/doc-lint <project>` checks
+the shape.
+
 ## Scope Check
 
 If the spec covers multiple independent subsystems, it should have been broken into sub-project specs during brainstorming. If it wasn't, suggest breaking this into separate plans — one per subsystem. Each plan should produce working, testable software on its own.

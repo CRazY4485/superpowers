@@ -69,6 +69,25 @@ to skip the rest of the selected path. Read-only project exploration is
 allowed while those prerequisites remain incomplete.
 </HARD-GATE>
 
+Every spec and plan is born with front matter, because nothing can propagate a
+later change without it:
+
+```yaml
+---
+status: active
+created: YYYY-MM-DD
+derived-from: docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md   # plans only
+decisions: D0006, D0011
+---
+```
+
+`status` moves only through the vocabulary `draft / active / delivered /
+superseded / invalidated / abandoned`, and every terminal or backward status
+names what moved it - `delivered-by`, `superseded-by`, `invalidated-by`,
+`abandoned-by`. When an earlier stage turns out wrong, that is a recorded move:
+`superpowers:reworking-earlier-stages`. `bash hooks/doc-lint <project>` checks
+the shape.
+
 ## Three Paths
 
 Before your first question, classify the request and say the

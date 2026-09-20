@@ -139,6 +139,22 @@ output="$(bash "$LINT" "$overlap" 2>&1 || true)"
 assert_contains "two active decisions on one scope are flagged" "$output" "delivery/retries"
 assert_contains "the overlap asks for reconciliation, not a hard error" "$output" "WARN"
 
+nonmonotonic="$TEST_ROOT/nonmonotonic.md"
+write_file "$nonmonotonic" <<'EOF'
+## D0007 | 2026-05-01 | active | scope: api/limits
+**Decision:** Cap page size at 200.
+**Why:** Larger pages time out against the report query.
+**Evidence:** measured 12s at 500 rows, 2026-05-01
+
+## D0005 | 2026-05-02 | active | scope: api/sorting
+**Decision:** Sort by created_at descending by default.
+**Why:** The owner reads newest first.
+**Evidence:** owner message, 2026-05-02
+EOF
+output="$(bash "$LINT" "$nonmonotonic" 2>&1 || true)"
+assert_contains "a decision id that goes backwards is an error" "$output" "D0005"
+assert_contains "the reason names the ordering rule" "$output" "increase"
+
 echo
 echo "Decision gate"
 
@@ -185,6 +201,34 @@ if printf '%s' "$output" | node "$SCRIPT_DIR/assert-pretooluse.cjs" "delivery/re
 else
     fail "an unreconciled overlap warns without blocking"
     printf '%s\n' "$output" | sed 's/^/        /'
+fi
+
+removed="$(new_repo removed)"
+removable="$TEST_ROOT/removable.md"
+write_file "$removable" <<'EOF'
+## D0020 | 2026-06-01 | active | scope: ui/theme
+**Decision:** Ship a single light theme.
+**Why:** One theme to maintain until there is demand for more.
+**Evidence:** owner message, 2026-06-01
+
+## D0021 | 2026-06-02 | active | scope: ui/locale
+**Decision:** Dates render in the viewer's locale.
+**Why:** The owner and the accountant are in different regions.
+**Evidence:** owner message, 2026-06-02
+EOF
+cp "$removable" "$removed/.claude/context/decisions.md"
+git -C "$removed" add -A
+git -C "$removed" commit -q -m "record decisions"
+# Delete D0020 outright - nothing references it, so only the reuse rule can catch this.
+awk '/^## D0020/{skip=1} /^## D0021/{skip=0} !skip' "$removable" > "$removed/.claude/context/decisions.md"
+git -C "$removed" add -A
+output="$(run_gate "$removed")"
+if printf '%s' "$output" | node "$SCRIPT_DIR/assert-pretooluse.cjs" --deny "D0020"; then
+    pass "deleting a decision id from the log blocks the commit"
+else
+    fail "deleting a decision id from the log blocks the commit"
+    printf '%s
+' "$output" | sed 's/^/        /'
 fi
 
 untouched="$(new_repo untouched)"

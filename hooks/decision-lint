@@ -54,6 +54,17 @@ for file in "$@"; do
         if (id in id_line) {
             printf "ERROR %s:%d duplicate decision id %s (already used at line %d)\n", FILE, NR, id, id_line[id]
         }
+
+        # Numbers only ever go up. A number that was used once is spent, even
+        # when the decision it named was withdrawn - reusing it makes every
+        # earlier reference ambiguous.
+        num = id
+        sub(/^D/, "", num)
+        num = num + 0
+        if (highest != "" && num <= highest) {
+            printf "ERROR %s:%d %s comes after D%04d - decision ids must increase, and a spent number is never reused\n", FILE, NR, id, highest
+        }
+        if (highest == "" || num > highest) highest = num
         id_line[id] = NR
         id_status[id] = state
         id_scope[id] = scope

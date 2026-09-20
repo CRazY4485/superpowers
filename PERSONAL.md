@@ -392,6 +392,44 @@ oxuma işidir.
 
 Detallar: `docs/standards-and-briefs.md`.
 
+## Sənəd həyat dövrü və geriyə qayıtma (fork-a xas)
+
+Framework sənəd generatorudur — layihədə 15 plan yığılır və hansının hələ doğru
+olduğu bilinmir. Ən bahalı hal isə **səssiz geriyə qayıtmadır**: spec yerindəcə
+dəyişdirilir, ondan törəyən plan köhnə mətnlə qalır, artıq təhvil verilmiş iş
+ölmüş fərziyyə üzərində durur.
+
+**İki sənəd növü:** *yaşayan* sənəd (profil, arxitektura icmalı) səhv olanda
+**redaktə olunur**; *tarixli artefakt* (`2026-09-19-...-design.md`, plan) **heç vaxt
+geriyə dönük dəyişdirilmir** — status alır. Tarixli artefaktı bugünə uyğunlaşdırmaq
+layihənin özünü izah etmə qabiliyyətini öldürür.
+
+**Ön başlıq** (spec və plan yaranan anda yazılır — sonradan bərpa edilə bilməz):
+
+```yaml
+status: active     # draft | active | delivered | superseded | invalidated | abandoned
+created: 2026-09-20
+derived-from: docs/superpowers/specs/2026-09-19-import-design.md
+decisions: D0006, D0011
+```
+
+Hər terminal və geriyə status **nəyəsə işarə etməlidir**: `delivered-by` (commit),
+`superseded-by` (sənəd), `invalidated-by` / `abandoned-by` (qərar). Mərhələ
+dəyişikliyi səssiz baş verə bilmir.
+
+**Nömrə qaydaları:** ID xərclənir, təkrar işlənmir. `decision-lint` hər yeni qeydin
+ID-sinin əvvəlkilərdən böyük olmasını tələb edir; commit qapısı tarixçədə olan
+ID-nin silinməsini **bloklayır** — geri götürülən qərar nömrəsini saxlayır, statusu
+dəyişir.
+
+**Geriyə qayıtma** (`superpowers:reworking-earlier-stages`) beş şey istehsal edir:
+sübutlu tətik, artefaktların nişanlanması, **artıq təhvil verilmiş işin taleyi**
+(sahibin qərarı, nəticələri ilə təqdim edilmiş), qayıdışın öz qərar qeydi, və
+`state.md`-də bərpa nöqtəsi. Rippl sırası: qərarlar → törəmə sənədlər → **testlər** → kod.
+
+`hooks/doc-lint` + `/superpowers:doc-audit` mexaniki hissəni tutur.
+Detallar: `docs/document-lifecycle.md`.
+
 ## Hansı qovluqlar əhəmiyyətlidir
 
 Claude Code üçün yalnız bunlar işləyir:
@@ -424,6 +462,7 @@ konfliktləri çıxacaq.
 - `skills/researching-with-official-docs/` — rəsmi sənəd + Playwright MCP ilə araşdırma
 - `skills/keeping-tests-honest/` — testi zəiflətmə təzyiqinə qarşı
 - `skills/reconciling-decisions/` — qərar ziddiyyətləri və əsaslandırma intizamı
+- `skills/reworking-earlier-stages/` — geriyə qayıtmanın qeydlə baş verməsi
 - `skills/following-the-architectural-constitution/` — kodlaşdırma standartı (sənin sənədin)
 - `skills/briefing-subagents/` — sub-agent brifinqinin beş hissəsi
 - `hooks/project-context`, `hooks/context-nudge`, `hooks/interview-context` — inject və xatırlatma hook-ları
@@ -431,12 +470,13 @@ konfliktləri çıxacaq.
 - `hooks/commit-gate`, `hooks/branch-guard`, `hooks/research-nudge` — sirr/konflikt/böyük fayl qapısı, default branch və araşdırma mənbəyi xatırlatmaları
 - `hooks/test-integrity` — testin zəiflədilməsi qapısı
 - `hooks/decision-lint`, `hooks/decision-gate` — qərar qeydlərinin linteri və commit qapısı
+- `hooks/doc-lint` — spec/plan ön başlıqlarının və qərar bağlarının linteri
 - `hooks/commit-gates` — üç commit yoxlaması bir prosesdə (sirr, test bütövlüyü, qərar qeydləri); `commit-gate`/`test-integrity`/`decision-gate` nazik sarğılardır
 - `hooks/brief-check` — sub-agent brifinqinin tamlıq yoxlaması
 - `plugin-evals/` — davranış eval-ları (4 case), `docs/evals.md`
-- `commands/` — `context-init`, `context-save`, `interview-status`, `interview-close`, `checkpoints`, `decision-audit`, `constitution-init`
+- `commands/` — `context-init`, `context-save`, `interview-status`, `interview-close`, `checkpoints`, `decision-audit`, `constitution-init`, `doc-audit`
 - `docs/project-context.md`, `docs/interview-ledger.md`, `docs/git-checkpoints.md` — sənədlər
-- `tests/hooks/test-project-context.sh`, `test-interview-ledger.sh`, `test-git-checkpoint.sh`, `test-commit-nudge.sh`, `test-commit-gate.sh`, `test-research-nudge.sh`, `test-test-integrity.sh`, `test-decision-lint.sh`, `test-brief-check.sh` — testlər
+- `tests/hooks/test-project-context.sh`, `test-interview-ledger.sh`, `test-git-checkpoint.sh`, `test-commit-nudge.sh`, `test-commit-gate.sh`, `test-research-nudge.sh`, `test-test-integrity.sh`, `test-decision-lint.sh`, `test-brief-check.sh`, `test-doc-lint.sh` — testlər
 
 **Upstream fayllarına toxunulan yerlər** (merge zamanı konflikt ehtimalı olan siyahı —
 yenilik gələndə əvvəlcə bunlara bax):
