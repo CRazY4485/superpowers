@@ -24,9 +24,11 @@ assert_empty() {
     fi
 }
 
+# Every streak message in this suite comes from a failing run, so the reply must
+# carry the PostToolUseFailure event name - the harness discards a mismatch.
 assert_says() {
     local description="$1" payload="$2" needle="$3"
-    if printf '%s' "$payload" | node "$SCRIPT_DIR/assert-posttooluse.cjs" "$needle"; then
+    if printf '%s' "$payload" | node "$SCRIPT_DIR/assert-posttooluse.cjs" --event PostToolUseFailure "$needle"; then
         pass "$description"
     else
         fail "$description"
