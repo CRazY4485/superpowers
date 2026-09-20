@@ -63,12 +63,12 @@ state_file="${CONTEXT_DIR}/state.md"
 decisions_file="${CONTEXT_DIR}/decisions.md"
 
 if [ -f "$profile_file" ]; then
-    body+="$(emit_file "$profile_file" "project.md - project profile" "$MAX_PROFILE_CHARS")${newline}"
+    body+="$(emit_file "$profile_file" "project.md - project profile" "$MAX_PROFILE_CHARS")${newline}${newline}"
 fi
 
 if [ -f "$state_file" ]; then
     state_heading="state.md - current state (updated $(format_epoch "$(file_mtime "$state_file")"))"
-    body+="$(emit_file "$state_file" "$state_heading" "$MAX_STATE_CHARS")${newline}"
+    body+="$(emit_file "$state_file" "$state_heading" "$MAX_STATE_CHARS")${newline}${newline}"
 fi
 
 # What the repository did after state.md was last written. A session that
