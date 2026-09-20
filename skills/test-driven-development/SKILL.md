@@ -307,6 +307,11 @@ Can't check all boxes? You skipped TDD. Start over.
 
 ## When Stuck
 
+If the pressure is to get past a failing test rather than to satisfy it -
+skipping it, deleting it, loosening an assertion, or asserting on whatever the
+code currently returns - stop and use `superpowers:keeping-tests-honest`. The
+code moves to satisfy the test, never the reverse.
+
 | Problem | Solution |
 |---------|----------|
 | Don't know how to test | Write wished-for API. Write assertion first. Ask your human partner. |
