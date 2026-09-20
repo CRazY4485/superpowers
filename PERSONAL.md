@@ -9,6 +9,11 @@ Hər mexanizmin izahı `docs/` altında **bir dəfə** yazılıb — burada tək
 
 ## Bu fork nədir və nə deyil
 
+**Bu repo-nun məqsədi:** framework-ü təkmilləşdirərək **şəxsi istifadəyə yararlı
+hala gətirmək**. Yəni burada görülən iş orijinalın özünə töhfə vermək deyil,
+öz iş üslubuna uyğun, öz layihələrində etibarlı işləyən bir alət qurmaqdır.
+Orijinalla uyğunluq yalnız bir şeyə lazımdır: onun düzəlişlərindən faydalanmaq.
+
 Repo **xüsusi təkmilləşdirmə və şəxsi istifadə üçün** fork edilib. İşlədilən
 yeganə framework budur: **orijinal `obra/superpowers` heç bir zaman quraşdırılmır
 və istifadə edilmir** — nə rəsmi marketplace-dən, nə `obra/superpowers-marketplace`-dən.
@@ -71,6 +76,29 @@ bash scripts/upstream-register.sh --full   # üstəgəl fork-un əlavə etdiyi s
 ```
 
 Qaydalar və fork xərcini aşağı saxlamaq prinsipi: **`docs/upstream-register.md`**.
+
+### Niyə reyestr və sync skripti var (hər dəfə düşünməmək üçün)
+
+Qərar belədir: **upstream-dən ayrılmırıq**, çünki orijinal hələ də real düzəlişlər
+verir (Windows hook düzəlişləri, skill kökləmələri, yeni harness dəstəyi) və onları
+çəkmək bir əmrlik işdir. Amma bunun bir qiyməti var və reyestr məhz o qiyməti
+idarə etmək üçündür:
+
+- Bu fork-un əlavə etdiyi şeylərin **böyük hissəsi yeni fayllardır** — onlar merge
+  zamanı heç vaxt konflikt vermir.
+- **13 yerdə** isə upstream-in öz faylına toxunulub (göstərici abzasları, hook
+  qeydiyyatı). Upstream yeni reliz buraxanda konflikt **yalnız orada** olacaq.
+- Reyestr həmin siyahını **hesablayır** (saxlamır, ona görə köhnələ bilmir) və hər
+  fayl üçün həll qaydasını əvvəlcədən verir; `--full` isə bizim əlavə etdiyimiz
+  sətirləri çap edir — konflikt anında hazır reseptdir.
+
+**Sənin yadda saxlamalı olduğun heç nə yoxdur:** `sync-upstream.ps1` reyestri
+merge-dən əvvəl özü çap edir. Praktikada bu o deməkdir ki, upstream yeniliyi
+çəkmək hər dəfə eyni mexaniki addım olur, tapmaca yox.
+
+Fork xərcini aşağı saxlamağın qaydası da sadədir: mümkün olanda **yeni fayl** yarat;
+upstream faylına toxunmalı olsan, dəyişiklik **kiçik və əlavə xarakterli** olsun.
+Bu siyahı 13-dən 40-a çıxarsa, bu, artıq ayrılmaq üçün siqnaldır.
 
 ## Mexanizmlər
 
