@@ -18,10 +18,11 @@ payload=$(cat 2>/dev/null || true)
 # appear in a work-destroying command are anywhere in the payload, there is
 # nothing to guard. This runs on every Bash call, so it must be nearly free.
 printf '%s' "$payload" | grep -qE '(reset|checkout|restore|clean|stash|branch|rebase|force|amend|(^|[^A-Za-z])rm[^A-Za-z]|shred|truncate|delete|Remove-Item|Clear-Content|rmdir|(^|[^A-Za-z])del[^A-Za-z])' || exit 0
-command -v node >/dev/null 2>&1 || exit 0
+NODE_BIN="${SUPERPOWERS_NODE_BIN:-node}"
+command -v "$NODE_BIN" >/dev/null 2>&1 || exit 0
 
 sep=$'\x1f'
-parsed=$(printf '%s' "$payload" | node -e '
+parsed=$(printf '%s' "$payload" | "$NODE_BIN" -e '
 let raw = "";
 process.stdin.on("data", (d) => { raw += d; });
 process.stdin.on("end", () => {

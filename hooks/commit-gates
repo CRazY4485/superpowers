@@ -37,10 +37,11 @@ payload=$(cat 2>/dev/null || true)
 # a commit, and this runs on every Bash call. grep on the raw payload costs
 # about a millisecond; node startup costs two hundred.
 printf '%s' "$payload" | grep -q 'commit' || exit 0
-command -v node >/dev/null 2>&1 || exit 0
+NODE_BIN="${SUPERPOWERS_NODE_BIN:-node}"
+command -v "$NODE_BIN" >/dev/null 2>&1 || exit 0
 
 sep=$'\x1f'
-parsed=$(printf '%s' "$payload" | node -e '
+parsed=$(printf '%s' "$payload" | "$NODE_BIN" -e '
 let raw = "";
 process.stdin.on("data", (d) => { raw += d; });
 process.stdin.on("end", () => {

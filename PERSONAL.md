@@ -43,6 +43,28 @@ claude plugin install superpowers@superpowers-personal
 Sonra Claude Code-u **restart et** — skill-lər sessiya başlayanda `SessionStart`
 hook-u ilə yüklənir.
 
+### Ön şərtlər (yeni cihazda mütləq yoxla)
+
+Yuxarıdakı iki əmr plugin-i quraşdırmaq üçün kifayətdir, amma **mexanizmlərin
+işləməsi üçün** maşında bunlar olmalıdır:
+
+| Lazımdır | Nə üçün | Yoxdursa nə olur |
+| --- | --- | --- |
+| **git** | Marketplace klonu, checkpoint-lər, bütün qapılar | Heç nə işləmir |
+| **bash** (Windows-da Git for Windows) | `run-hook.cmd` onunla işləyir | **Heç bir hook işləmir** |
+| **node** | 6 hook payload-u onunla parse edir | Təhlükəli əmr qoruyucusu, commit qapıları, brifinq yoxlaması, araşdırma xatırlatması və TDD döngə limiti **səssizcə sıradan çıxır** |
+| Playwright MCP (opsional) | Araşdırma siyasəti | Skill qalır, brauzer yoxdur |
+
+Bir əmrlə hamısını yoxla:
+
+```bash
+bash scripts/doctor.sh
+```
+
+`node` tapılmasa, sessiya başında **xəbərdarlıq inject olunur** — yəni qorumaların
+işləmədiyini təxmin etmək lazım gəlmir, sənə deyilir. Node başqa yerdədirsə:
+`SUPERPOWERS_NODE_BIN` dəyişəni ilə yolunu göstər.
+
 ## Öz dəyişikliyini etmək
 
 ```bash

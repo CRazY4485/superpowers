@@ -34,6 +34,19 @@ if [ -n "$project_context" ]; then
     session_context="${session_context}\n\n${project_context_escaped}"
 fi
 
+# Several hooks parse their payload with node. Without it they exit silently,
+# which is the worst failure mode available: the protections look present and
+# are not. Say so once per session instead.
+NODE_BIN="${SUPERPOWERS_NODE_BIN:-node}"
+if ! command -v "$NODE_BIN" >/dev/null 2>&1; then
+    degraded_text="<SUPERPOWERS_DEGRADED>
+node was not found on PATH, so these mechanisms are silently inactive in this session: the destructive-command guard, the commit gates (secrets, unresolved conflict markers, test-suite integrity, decision records), the subagent brief check, the research-source nudge, and the TDD loop budget.
+Install Node.js, or point SUPERPOWERS_NODE_BIN at it. Tell your human partner before they rely on any of those checks - and run scripts/doctor.sh for the full picture.
+</SUPERPOWERS_DEGRADED>"
+    degraded_escaped=$(escape_for_json "$degraded_text")
+    session_context="${session_context}\n\n${degraded_escaped}"
+fi
+
 # Output context injection as JSON.
 # Cursor hooks expect additional_context (snake_case).
 # Claude Code hooks expect hookSpecificOutput.additionalContext (nested).

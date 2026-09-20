@@ -208,6 +208,26 @@ else
     fail "session-start is unchanged for projects without context files"
 fi
 
+# --- the node dependency is announced, not silent ------------------------------
+degraded="$(make_project degraded)"
+make_context "$degraded"
+printf '# Current state
+plain
+' > "$degraded/.claude/context/state.md"
+output="$(CLAUDE_PLUGIN_ROOT="$REPO_ROOT" CLAUDE_PROJECT_DIR="$degraded"     SUPERPOWERS_NODE_BIN="definitely-not-a-real-binary" bash "$SESSION_START")"
+if printf '%s' "$output" | node "$SCRIPT_DIR/assert-session-context.cjs" "SUPERPOWERS_DEGRADED" "silently inactive"; then
+    pass "a missing node is announced at session start"
+else
+    fail "a missing node is announced at session start"
+fi
+
+output="$(CLAUDE_PLUGIN_ROOT="$REPO_ROOT" CLAUDE_PROJECT_DIR="$degraded" bash "$SESSION_START")"
+if printf '%s' "$output" | node "$SCRIPT_DIR/assert-session-context.cjs" --absent "SUPERPOWERS_DEGRADED"; then
+    pass "with node present nothing is said"
+else
+    fail "with node present nothing is said"
+fi
+
 # --- Stop-hook staleness nudge ----------------------------------------------
 echo
 echo "Stop hook staleness nudge"
