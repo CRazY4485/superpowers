@@ -55,7 +55,13 @@ işləməsi üçün** maşında bunlar olmalıdır:
 | **node** | 6 hook payload-u onunla parse edir | Təhlükəli əmr qoruyucusu, commit qapıları, brifinq yoxlaması, araşdırma xatırlatması və TDD döngə limiti **səssizcə sıradan çıxır** |
 | Playwright MCP (opsional) | Araşdırma siyasəti | Skill qalır, brauzer yoxdur |
 
-Bir əmrlə hamısını yoxla:
+Bir əmrlə hamısını yoxla — Claude Code daxilindən:
+
+```
+/superpowers:doctor
+```
+
+və ya terminaldan:
 
 ```bash
 bash scripts/doctor.sh
@@ -141,9 +147,9 @@ Hamısı işlədiyin **layihələrdə** işləyir, bu repo-da yox. Detal sütund
 | Araşdırma mənbələri | `WebFetch`/`WebSearch` çağırılanda brauzerə və rəsmi sənədə yönləndirmə | `docs/research-sources.md` |
 | Branch qoruyucusu | Default branch-də redaktə saatda bir dəfə xatırladılır (bloklamır) | `docs/git-checkpoints.md` |
 
-Slash əmrləri: `/superpowers:context-init`, `context-save`, `interview-status`,
-`interview-close`, `checkpoints`, `decision-audit`, `doc-audit`, `rework`,
-`constitution-init`.
+Slash əmrləri: `/superpowers:doctor`, `context-init`, `context-save`,
+`interview-status`, `interview-close`, `checkpoints`, `decision-audit`,
+`doc-audit`, `rework`, `constitution-init`.
 
 ## Yoxlama
 
