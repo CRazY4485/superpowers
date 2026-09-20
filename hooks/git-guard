@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# PreToolUse hook: before a Bash command that can destroy uncommitted work,
+# snapshot the working tree so the command becomes reversible.
+#
+# It never blocks. Blocking a command the agent chose deliberately is friction;
+# losing work that was never committed is damage. This trades one for the other.
+#
+# Prints a PreToolUse payload on stdout, or nothing. Always exits 0.
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+
+payload=$(cat 2>/dev/null || true)
+[ -n "$payload" ] || exit 0
+command -v node >/dev/null 2>&1 || exit 0
+
+sep=$'\x1f'
+parsed=$(printf '%s' "$payload" | node -e '
+let raw = "";
+process.stdin.on("data", (d) => { raw += d; });
+process.stdin.on("end", () => {
+  try {
+    const p = JSON.parse(raw);
+    const cmd = (p.tool_input && p.tool_input.command) || "";
+    process.stdout.write(`${p.tool_name || ""}\u001f${cmd}`);
+  } catch (error) {
+    process.stdout.write("");
+  }
+});' 2>/dev/null)
+
+[ -n "$parsed" ] || exit 0
+tool_name="${parsed%%${sep}*}"
+command_text="${parsed#*${sep}}"
+
+[ "$tool_name" = "Bash" ] || exit 0
+[ -n "$command_text" ] || exit 0
+
+# Commands that can throw away work that is not in a commit.
+destructive_pattern='git([[:space:]]+-[^[:space:]]+)*[[:space:]]+(checkout[[:space:]]+(--[[:space:]]|\.)|restore([[:space:]]|$)|reset[[:space:]]+(--hard|--merge|--keep)|clean[[:space:]]+-[a-zA-Z]*f|stash[[:space:]]+(drop|clear|pop)|branch[[:space:]]+-D|rebase([[:space:]]|$)|push[[:space:]].*--force|commit[[:space:]].*--amend)'
+
+printf '%s' "$command_text" | grep -qE "$destructive_pattern" || exit 0
+
+git -C "$PROJECT_DIR" rev-parse --git-dir >/dev/null 2>&1 || exit 0
+
+snapshot=$(CLAUDE_PROJECT_DIR="$PROJECT_DIR" bash "${SCRIPT_DIR}/git-checkpoint" snapshot "pre-destructive" 2>/dev/null || true)
+
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+short_command=$(printf '%s' "$command_text" | head -c 200 | tr '\n' ' ')
+
+if [ -n "$snapshot" ]; then
+    sha="${snapshot##* }"
+    message="About to run a command that can discard uncommitted work: ${short_command}"
+    message+=$'\n'"A checkpoint of the whole working tree was saved first: ${sha}."
+    message+=$'\n'"Recover afterwards with: git diff HEAD ${sha} | inspect, git checkout ${sha} -- <path> | one file, git checkout ${sha} -- . | everything."
+    message+=$'\n'"Tell your human partner the checkpoint exists if the command turns out to be a mistake."
+else
+    message="About to run: ${short_command}"
+    message+=$'\n'"There is nothing uncommitted to lose - the working tree matches the last commit or the last checkpoint."
+fi
+
+escaped=$(escape_for_json "$message")
+
+printf '{\n'
+printf '  "hookSpecificOutput": {\n'
+printf '    "hookEventName": "PreToolUse",\n'
+printf '    "additionalContext": "%s"\n' "$escaped"
+printf '  }\n'
+printf '}\n'
+
+exit 0

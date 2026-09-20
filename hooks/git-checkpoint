@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# Working-tree checkpoints that live outside the project's history.
+#
+#   git-checkpoint snapshot [label]   snapshot the working tree, print "<ref> <sha>"
+#   git-checkpoint list [count]       list checkpoints, newest first
+#
+# A snapshot is an ordinary commit built from a scratch index, so it captures
+# tracked edits AND untracked files (respecting .gitignore) without touching the
+# working tree, the real index, HEAD, or any branch. It hangs off
+# refs/superpowers/checkpoints/, which `git log`, `git status` and `git push`
+# all ignore.
+#
+# Silent and exit 0 whenever there is nothing to do - outside a repo, on a clean
+# tree, or when the tree is identical to the previous checkpoint.
+
+set -uo pipefail
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+KEEP="${SUPERPOWERS_CHECKPOINT_KEEP:-50}"
+REF_PREFIX="refs/superpowers/checkpoints"
+
+command_name="${1:-snapshot}"
+shift 2>/dev/null || true
+
+git_dir=$(git -C "$PROJECT_DIR" rev-parse --absolute-git-dir 2>/dev/null) || exit 0
+[ -n "$git_dir" ] || exit 0
+
+git_in_repo() {
+    git -C "$PROJECT_DIR" "$@"
+}
+
+prune_checkpoints() {
+    local kept=0 ref
+    while IFS= read -r ref; do
+        [ -n "$ref" ] || continue
+        kept=$((kept + 1))
+        if [ "$kept" -gt "$KEEP" ]; then
+            git_in_repo update-ref -d "$ref" 2>/dev/null || true
+        fi
+    done < <(git_in_repo for-each-ref --sort=-refname --format='%(refname)' "$REF_PREFIX" 2>/dev/null)
+}
+
+do_snapshot() {
+    local label="${1:-turn}"
+    label=$(printf '%s' "$label" | tr -c 'A-Za-z0-9._-' '-' | cut -c1-40)
+
+    local index_file="${git_dir}/superpowers-checkpoint-index"
+    local tree head head_tree parent_args=() last last_tree commit ref
+
+    # A scratch index keeps the real one untouched; reusing the file between
+    # runs keeps its stat cache, so this stays cheap on large trees.
+    if ! tree=$(GIT_INDEX_FILE="$index_file" git_in_repo add -A 2>/dev/null &&
+                GIT_INDEX_FILE="$index_file" git_in_repo write-tree 2>/dev/null); then
+        return 0
+    fi
+    [ -n "$tree" ] || return 0
+
+    if head=$(git_in_repo rev-parse -q --verify HEAD 2>/dev/null) && [ -n "$head" ]; then
+        parent_args=(-p "$head")
+        head_tree=$(git_in_repo rev-parse -q --verify "${head}^{tree}" 2>/dev/null)
+        # Clean tree: nothing the branch does not already hold.
+        [ "$tree" = "$head_tree" ] && return 0
+    fi
+
+    last=$(git_in_repo for-each-ref --sort=-refname --format='%(objectname)' "$REF_PREFIX" 2>/dev/null | head -1)
+    if [ -n "$last" ]; then
+        last_tree=$(git_in_repo rev-parse -q --verify "${last}^{tree}" 2>/dev/null)
+        [ "$tree" = "$last_tree" ] && return 0
+    fi
+
+    commit=$(git_in_repo commit-tree "$tree" "${parent_args[@]+"${parent_args[@]}"}" \
+        -m "checkpoint: ${label}" 2>/dev/null) || return 0
+    [ -n "$commit" ] || return 0
+
+    ref="${REF_PREFIX}/$(date +%Y%m%d-%H%M%S)-${label}"
+    git_in_repo update-ref "$ref" "$commit" 2>/dev/null || return 0
+
+    printf '%s %s\n' "$ref" "$commit"
+    prune_checkpoints
+}
+
+do_list() {
+    local count="${1:-20}"
+    local rows
+    rows=$(git_in_repo for-each-ref --sort=-refname --count="$count" \
+        --format='%(objectname:short)  %(refname)  %(subject)' "$REF_PREFIX" 2>/dev/null)
+    [ -n "$rows" ] || return 0
+    printf '%s\n' "$rows"
+    printf '\nInspect: git diff HEAD <sha>   |   one file: git checkout <sha> -- <path>\n'
+    printf 'Everything back: git checkout <sha> -- .   (overwrites current edits)\n'
+}
+
+case "$command_name" in
+    snapshot) do_snapshot "${1:-turn}" ;;
+    list) do_list "${1:-20}" ;;
+    *) exit 0 ;;
+esac
+
+exit 0

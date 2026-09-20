@@ -190,6 +190,42 @@ yalnız unutmağı görünən edir.
 
 Detallar: `docs/interview-ledger.md`.
 
+## Git checkpoint-ləri və təhlükəli əmr qoruyucusu (fork-a xas)
+
+Commit edilməmiş işi geri qaytarıla bilən edir. Checkpoint — **müvəqqəti index**
+üzərindən qurulan adi git commit-idir, `refs/superpowers/checkpoints/` altında saxlanılır:
+
+- İzlənən dəyişiklikləri **və** untracked faylları tutur (`.gitignore`-a hörmətlə).
+- Heç nəyə toxunmur: iş ağacı, index, HEAD, branch — hamısı olduğu kimi qalır.
+  `git status`, `git log` dəyişmir, `git push` bu ref-ləri göndərmir.
+- Adi commit olduğu üçün tanış alətlər işləyir: `git diff HEAD <sha>`,
+  `git show <sha>:fayl`, `git checkout <sha> -- fayl`.
+
+Nə vaxt götürülür:
+
+| Tətik | Hook | Etiket |
+| --- | --- | --- |
+| Hər cavabın sonunda | `Stop` (async) | `turn` |
+| İşi silə bilən Bash əmrindən **əvvəl** | `PreToolUse` (matcher `Bash`) | `pre-destructive` |
+
+Qoruyucu bu əmrləri tanıyır: `reset --hard/--merge/--keep`, `checkout -- `,
+`restore`, `clean -f*`, `stash drop|clear|pop`, `branch -D`, `rebase`,
+`commit --amend`, `push --force`. **Bloklamır** — əvvəlcə checkpoint götürür və
+sha ilə bərpa əmrlərini kontekstə yazır. Qəsdən yazılmış əmri bloklamaq maneədir;
+commit edilməmiş işi itirmək isə ziyandır — mexanizm ikincini birinciyə çevirir.
+
+```
+/superpowers:checkpoints          # siyahı + bərpa axını
+git diff HEAD <sha>               # nə fərq var
+git checkout <sha> -- <fayl>      # bir faylı geri qaytar
+```
+
+Skill: `superpowers:recovering-work-with-git` — commit tezliyi, hansı "undo"-nun
+hansı tarixçədə təhlükəsiz olduğu (`revert` vs `reset --soft` vs `--hard`) və
+**bərpa nərdivanı**: checkpoint → reflog → stash → `fsck --lost-found`.
+
+Detallar və limitlər: `docs/git-checkpoints.md`.
+
 ## Hansı qovluqlar əhəmiyyətlidir
 
 Claude Code üçün yalnız bunlar işləyir:
@@ -216,10 +252,12 @@ konfliktləri çıxacaq.
 - `PERSONAL.md` — bu sənəd
 - `skills/maintaining-project-context/` — layihə konteksti skill-i və şablonlar
 - `skills/keeping-an-interview-ledger/` — müsahibə reyestri skill-i və şablon
+- `skills/recovering-work-with-git/` — commit tezliyi, undo seçimi, bərpa nərdivanı
 - `hooks/project-context`, `hooks/context-nudge`, `hooks/interview-context` — inject və xatırlatma hook-ları
-- `commands/` — `context-init`, `context-save`, `interview-status`, `interview-close`
-- `docs/project-context.md`, `docs/interview-ledger.md` — sənədlər
-- `tests/hooks/test-project-context.sh`, `tests/hooks/test-interview-ledger.sh` — testlər
+- `hooks/git-checkpoint`, `hooks/checkpoint-turn`, `hooks/git-guard` — checkpoint mühərriki, turluq snapshot, təhlükəli əmr qoruyucusu
+- `commands/` — `context-init`, `context-save`, `interview-status`, `interview-close`, `checkpoints`
+- `docs/project-context.md`, `docs/interview-ledger.md`, `docs/git-checkpoints.md` — sənədlər
+- `tests/hooks/test-project-context.sh`, `test-interview-ledger.sh`, `test-git-checkpoint.sh` — testlər
 
 **Upstream fayllarına toxunulan yerlər** (merge zamanı konflikt ehtimalı olan siyahı —
 yenilik gələndə əvvəlcə bunlara bax):
@@ -227,7 +265,7 @@ yenilik gələndə əvvəlcə bunlara bax):
 | Fayl | Nə əlavə edilib |
 | --- | --- |
 | `hooks/session-start` | Kontekst blokunun inject edilməsi |
-| `hooks/hooks.json` | `Stop` və `UserPromptSubmit` hook-larının qeydiyyatı |
+| `hooks/hooks.json` | `Stop` (2 giriş), `UserPromptSubmit` və `PreToolUse` hook-larının qeydiyyatı |
 | `skills/brainstorming/SKILL.md` | "Record What They Tell You" bölməsi, 2 checklist bəndi, 2 red-flag sətri, coverage gate |
 | `skills/writing-plans/SKILL.md` | "Ledger Coverage" bölməsi |
 | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` | Fork kimliyi, `version` sahəsinin silinməsi |
