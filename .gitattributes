@@ -11,6 +11,7 @@ hooks/session-start text eol=lf
 *.js text eol=lf
 *.mjs text eol=lf
 *.ts text eol=lf
+*.ps1 text eol=lf
 
 # Explicitly mark binary files
 *.png binary
