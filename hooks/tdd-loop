@@ -21,6 +21,10 @@ STATE_DIR="${SUPERPOWERS_TDD_STATE_DIR:-${TMPDIR:-/tmp}/superpowers-tdd-loop}"
 
 payload=$(cat 2>/dev/null || true)
 [ -n "$payload" ] || exit 0
+# Cheap pre-filter before spawning a JSON parser: this runs on every tool call
+# in the agentic loop, so anything that is plainly not a test run must cost a
+# grep, not a node startup.
+printf '%s' "$payload" | grep -qE '(pytest|unittest|npm|yarn|pnpm|jest|vitest|mocha|go[[:space:]]+test|cargo|dotnet|mvn|gradle|rspec|phpunit|ctest|tox|bats|tests?/)' || exit 0
 command -v node >/dev/null 2>&1 || exit 0
 
 sep=$'\x1f'
